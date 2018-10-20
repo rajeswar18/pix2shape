@@ -1138,8 +1138,6 @@ class GAN(object):
         """Save networks to hard disk."""
         torch.save(self.netG.state_dict(),
                    '%s/netG_epoch_%d.pth' % (self.opt.out_dir, epoch))
-        torch.save(self.netG2.state_dict(),
-                   '%s/netG2_epoch_%d.pth' % (self.opt.out_dir, epoch))
         torch.save(self.netD.state_dict(),
                    '%s/netD_epoch_%d.pth' % (self.opt.out_dir, epoch))
         torch.save(self.netE.state_dict(),
