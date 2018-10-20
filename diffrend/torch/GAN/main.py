@@ -28,7 +28,6 @@ from diffrend.torch.utils import (tch_var_f, tch_var_l, get_data,
                                   grad_spatial2d)
 from diffrend.torch.renderer import (render, render_splats_along_ray,
                                      z_to_pcl_CC)
-from diffrend.torch.NEstNet import NEstNetV1_2
 from diffrend.utils.sample_generator import uniform_sample_sphere
 from diffrend.utils.utils import contrast_stretch_percentile, save_xyz
 from tensorboardX import SummaryWriter
@@ -48,7 +47,6 @@ matplotlib.use('Agg')
 def copy_scripts_to_folder(expr_dir):
     """Copy scripts."""
     shutil.copy("twin_networks.py", expr_dir)
-    shutil.copy("../NEstNet.py", expr_dir)
     shutil.copy("../params.py", expr_dir)
     shutil.copy("../renderer.py", expr_dir)
     shutil.copy("datasets.py", expr_dir)
@@ -282,19 +280,18 @@ class GAN(object):
 
     def create_networks(self, ):
         """Create networks."""
-        self.netG, self.netG2, self.netD, self.netD2, self.netE = create_networks(
+        self.netG, _, self.netD, self.netD2, self.netE = create_networks(
             self.opt, verbose=True, depth_only=True)  # TODO: Remove D2 and G2
         # Create the normal estimation network which takes pointclouds in the
         # camera space and outputs the normals
-        assert self.netG2 is None
+
         self.sph_normals = True
-        self.netG2 = NEstNetV1_2(sph=self.sph_normals)
-        print(self.netG2)
+
         if not self.opt.no_cuda:
             self.netD = self.netD.cuda()
             self.netG = self.netG.cuda()
             self.netE = self.netE.cuda()
-            self.netG2 = self.netG2.cuda()
+
 
     def create_scene(self, ):
         """Create a semi-empty scene with camera parameters."""
@@ -356,16 +353,13 @@ class GAN(object):
             self.optimizerG = optim.Adam(itertools.chain(self.netG.parameters(),self.netE.parameters()),
                                          lr=self.opt.lr,
                                          betas=(self.opt.beta1, 0.999))
-            self.optimizerG2 = optim.Adam(self.netG2.parameters(),
-                                          lr=self.opt.lr,
-                                          betas=(self.opt.beta1, 0.999))
+
         elif self.opt.optimizer == 'rmsprop':
             self.optimizerD = optim.RMSprop(self.netD.parameters(),
                                             lr=self.opt.lr)
             self.optimizerG = optim.RMSprop(itertools.chain(self.netG.parameters(),self.netE.parameters()),
                                             lr=self.opt.lr)
-            self.optimizerG2 = optim.RMSprop(self.netG2.parameters(),
-                                             lr=self.opt.lr)
+
         else:
             raise ValueError('Unknown optimizer: ' + self.opt.optimizer)
 
@@ -382,9 +376,6 @@ class GAN(object):
         self.optG_z_lr_scheduler = LR_fn(
             self.optimizerG, step_size=self.opt.z_lr_sched_step,
             gamma=self.opt.z_lr_sched_gamma)
-        self.optG2_normal_lr_scheduler = LR_fn(
-            self.optimizerG2, step_size=self.opt.normal_lr_sched_step,
-            gamma=self.opt.normal_lr_sched_gamma)
         self.LR_SCHED_MAP = [self.optG_z_lr_scheduler,
                              self.optG2_normal_lr_scheduler]
         self.OPT_MAP = [self.optimizerG, self.optimizerG2]
@@ -559,17 +550,6 @@ class GAN(object):
             self.batch_size, int(self.opt.nz), 1, 1).normal_(0, 1)
         self.noisev = Variable(self.noise)  # TODO: Add volatile=True???
 
-    def generate_normals(self, z_batch, cam_pos, camera):
-        """Generate normals from depth."""
-        W, H = camera['viewport'][2:]
-        normals = []
-        for z, eye in zip(z_batch, cam_pos):
-            camera['eye'] = eye
-            pcl = z_to_pcl_CC(z.squeeze(), camera)
-            n = self.netG2(pcl.view(H, W, 3).permute(2, 0, 1)[np.newaxis, ...])
-            n = n.squeeze().permute(1, 2, 0).view(-1, 3).contiguous()
-            normals.append(n)
-        return torch.stack(normals)
 
     def tensorboard_pos_hook(self, grad):
 
@@ -693,12 +673,11 @@ class GAN(object):
             else:
                 z = F.relu(-batch[idx][:, 0]) + z_min
                 pos = -F.relu(-batch[idx][:, 0]) - z_min
-            normals = batch[idx][:, 1:]
 
             self.scene['objects']['disk']['pos'] = pos
 
             # Normal estimation network and est_normals don't go together
-            self.scene['objects']['disk']['normal'] = normals if self.opt.est_normals is False else None
+            self.scene['objects']['disk']['normal'] = None
 
             # Set camera position
             if batch_cond is None:
@@ -963,11 +942,9 @@ class GAN(object):
                     self.generate_noise_vector()
                     fake_z = self.netG(self.noisev, self.inputv_cond)
                     # The normal generator is dependent on z
-                    fake_n = self.generate_normals(fake_z, self.inputv_cond,
-                                                   self.scene['camera'])
-                    fake = torch.cat([fake_z, fake_n], 2)
+
                     fake_rendered, fd, loss = self.render_batch(
-                        fake, self.inputv_cond)
+                        fake_z, self.inputv_cond)
                     # Do not bp through gen
                     outD_fake = self.netD(fake_rendered.detach(),
                                           self.inputv_cond.detach(),self.noisev.detach())
@@ -1014,11 +991,9 @@ class GAN(object):
                 fake_z = self.netG(self.noisev, self.inputv_cond)
                 if iteration % self.opt.print_interval*4 == 0:
                     fake_z.register_hook(self.tensorboard_hook)
-                fake_n = self.generate_normals(fake_z, self.inputv_cond,
-                                               self.scene['camera'])
-                fake = torch.cat([fake_z, fake_n], 2)
+
                 fake_rendered, fd, loss = self.render_batch(
-                    fake, self.inputv_cond)
+                    fake_z, self.inputv_cond)
                 outG_fake = self.netD(fake_rendered, self.inputv_cond, self.noisev)
 
                 if self.opt.criterion == 'GAN':
@@ -1048,11 +1023,9 @@ class GAN(object):
                 else:
                     raise ValueError('Unknown GAN criterium')
                 reconstruction_z = self.netG(z_real, self.inputv_cond)
-                reconstruction_n = self.generate_normals(reconstruction_z, self.inputv_cond,
-                                               self.scene['camera'])
-                reconstruction = torch.cat([reconstruction_z, reconstruction_n], 2)
+
                 reconstruction_rendered, reconstructiond, loss = self.render_batch(
-                    reconstruction, self.inputv_cond)
+                    reconstruction_z, self.inputv_cond)
 
                 mse_criterion = nn.MSELoss().cuda()
                 reconstruction_loss = mse_criterion(reconstruction_rendered, self.inputv)
@@ -1106,11 +1079,11 @@ class GAN(object):
 
                     print('\n[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '
                           ' Loss_D_fake: %.4f Wassertein_D: %.4f '
-                          ' L2_loss: %.4f z_lr: %.8f, n_lr: %.8f, Disc_grad_norm: %.8f, Gen_grad_norm: %.8f' % (
+                          ' L2_loss: %.4f z_lr: %.8f,  Disc_grad_norm: %.8f, Gen_grad_norm: %.8f' % (
                           iteration, self.opt.n_iter, errD.data[0],
                           errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0], errD_fake.data[0],
                           Wassertein_D, loss.data[0],
-                          self.optG_z_lr_scheduler.get_lr()[0], self.optG2_normal_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G))
+                          self.optG_z_lr_scheduler.get_lr()[0],  gnorm_D, gnorm_G))
                     l2_file.write('%s\n' % (str(l2_loss.data[0])))
                     l2_file.flush()
                     print("written to file", str(l2_loss.data[0]))
@@ -1137,11 +1110,9 @@ class GAN(object):
 
                     fake_z = self.netG(self.noisev, cam_pos)
                     # The normal generator is dependent on z
-                    fake_n = self.generate_normals(fake_z, cam_pos,
-                                                   self.scene['camera'])
-                    fake = torch.cat([fake_z, fake_n], 2)
+
                     fake_rendered, fd, loss = self.render_batch(
-                        fake, cam_pos)
+                        fake_z, cam_pos)
 
                     cs = tch_var_f(contrast_stretch_percentile(
                         get_data(fd), 200, [fd.data.min(), fd.data.max()]))
