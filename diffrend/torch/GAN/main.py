@@ -376,9 +376,8 @@ class GAN(object):
         self.optG_z_lr_scheduler = LR_fn(
             self.optimizerG, step_size=self.opt.z_lr_sched_step,
             gamma=self.opt.z_lr_sched_gamma)
-        self.LR_SCHED_MAP = [self.optG_z_lr_scheduler,
-                             self.optG2_normal_lr_scheduler]
-        self.OPT_MAP = [self.optimizerG, self.optimizerG2]
+        self.LR_SCHED_MAP = [self.optG_z_lr_scheduler]
+        self.OPT_MAP = [self.optimizerG]
 
     def get_samples(self):
         """Get samples."""
