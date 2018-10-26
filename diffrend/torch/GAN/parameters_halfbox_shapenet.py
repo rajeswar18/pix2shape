@@ -40,7 +40,7 @@ class Parameters():
             default_root = '/home/sai/visualize/diffrend/data/cube'
             #default_out = './output'
             default_out = '/home/sai/output_newcolor_12june'
-        elif username == 'voletivi':
+        elif username == 'voletivi' or username == 'user1':
             default_root = '/u/voletivi/datasets/diffrend/data/cube'
             default_out = './render_samples'
         else:
@@ -159,7 +159,7 @@ class Parameters():
         self.parser.add_argument('--focal_length', type=float, default=0.1, help='focal length')
         self.parser.add_argument('--theta', nargs=2, type=float, default=[20,80], help='Angle in degrees from the z-axis.')
         self.parser.add_argument('--phi', nargs=2, type=float, default=[20,70], help='Angle in degrees from the x-axis.')
-        self.parser.add_argument('--axis', nargs=3, default=[0.7,1,1],type=float, help='Axis for random camera position.')
+        self.parser.add_argument('--axis', nargs=3, default=[0.,1.,0.],type=float, help='Axis for random camera position.')
         self.parser.add_argument('--cam_pos', nargs=3, type=float, help='Camera position.')
         self.parser.add_argument('--at', nargs=3, default=[0.05,0.0,0], type=float, help='Camera lookat position.')
         #self.parser.add_argument('--at', nargs=3, default=[ 0, 1, 0], type=float, help='Camera lookat position.')

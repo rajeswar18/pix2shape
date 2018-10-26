@@ -509,14 +509,14 @@ class GAN(object):
                                                 3).permute(2, 0, 1)
 
             # Add depth image to the output structure
-            if self.iterationa_no % self.opt.save_image_interval == 0:
-                imsave((inpath + str(self.iterationa_no) +
+            if self.iteration_no % self.opt.save_image_interval == 0:
+                imsave((inpath + str(self.iteration_no) +
                         'real_normalmap_{:05d}.png'.format(idx)),
                        target_normalmap_img_)
-                imsave((inpath + str(self.iterationa_no) +
+                imsave((inpath + str(self.iteration_no) +
                         'real_depth_{:05d}.png'.format(idx)), get_data(depth))
-                # imsave(inpath + str(self.iterationa_no) + 'real_depthmap_{:05d}.png'.format(idx), im_d)
-                # imsave(inpath + str(self.iterationa_no) + 'world_normalmap_{:05d}.png'.format(idx), target_worldnormalmap_img_)
+                # imsave(inpath + str(self.iteration_no) + 'real_depthmap_{:05d}.png'.format(idx), im_d)
+                # imsave(inpath + str(self.iteration_no) + 'world_normalmap_{:05d}.png'.format(idx), target_worldnormalmap_img_)
             data.append(im)
             data_depth.append(im_d)
             data_normal.append(im_n)
@@ -559,23 +559,23 @@ class GAN(object):
         self.writer.add_image("position_gradient_im",
                                 torch.sqrt(torch.sum(grad ** 2, dim=-1)),
 
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("position_mean_channel1",
                                get_data(torch.mean(torch.abs(grad[:,:,0]))),
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("position_gradient_mean_channel2",
                                get_data(torch.mean(torch.abs(grad[:,:,1]))),
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("position_gradient_mean_channel3",
                                get_data(torch.mean(torch.abs(grad[:,:,2]))),
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("position_gradient_mean",
                                get_data(torch.mean(grad)),
-                               self.iterationa_no)
-        self.writer.add_histogram("position_gradient_hist_channel1", grad[:,:,0].clone().cpu().data.numpy(),self.iterationa_no)
-        self.writer.add_histogram("position_gradient_hist_channel2", grad[:,:,1].clone().cpu().data.numpy(),self.iterationa_no)
-        self.writer.add_histogram("position_gradient_hist_channel3", grad[:,:,2].clone().cpu().data.numpy(),self.iterationa_no)
-        self.writer.add_histogram("position_gradient_hist_norm", torch.sqrt(torch.sum(grad ** 2, dim=-1)).clone().cpu().data.numpy(),self.iterationa_no)
+                               self.iteration_no)
+        self.writer.add_histogram("position_gradient_hist_channel1", grad[:,:,0].clone().cpu().data.numpy(),self.iteration_no)
+        self.writer.add_histogram("position_gradient_hist_channel2", grad[:,:,1].clone().cpu().data.numpy(),self.iteration_no)
+        self.writer.add_histogram("position_gradient_hist_channel3", grad[:,:,2].clone().cpu().data.numpy(),self.iteration_no)
+        self.writer.add_histogram("position_gradient_hist_norm", torch.sqrt(torch.sum(grad ** 2, dim=-1)).clone().cpu().data.numpy(),self.iteration_no)
         #print('grad', grad)
 
     def tensorboard_normal_hook(self, grad):
@@ -583,35 +583,35 @@ class GAN(object):
         self.writer.add_image("normal_gradient_im",
                                 torch.sqrt(torch.sum(grad ** 2, dim=-1)),
 
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("normal_gradient_mean_channel1",
                                get_data(torch.mean(torch.abs(grad[:,:,0]))),
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("normal_gradient_mean_channel2",
                                get_data(torch.mean(torch.abs(grad[:,:,1]))),
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("normal_gradient_mean_channel3",
                                get_data(torch.mean(torch.abs(grad[:,:,2]))),
-                               self.iterationa_no)
+                               self.iteration_no)
         self.writer.add_scalar("normal_gradient_mean",
                                get_data(torch.mean(grad)),
-                               self.iterationa_no)
-        self.writer.add_histogram("normal_gradient_hist_channel1", grad[:,:,0].clone().cpu().data.numpy(),self.iterationa_no)
-        self.writer.add_histogram("normal_gradient_hist_channel2", grad[:,:,1].clone().cpu().data.numpy(),self.iterationa_no)
-        self.writer.add_histogram("normal_gradient_hist_channel3", grad[:,:,2].clone().cpu().data.numpy(),self.iterationa_no)
-        self.writer.add_histogram("normal_gradient_hist_norm", torch.sqrt(torch.sum(grad ** 2, dim=-1)).clone().cpu().data.numpy(),self.iterationa_no)
+                               self.iteration_no)
+        self.writer.add_histogram("normal_gradient_hist_channel1", grad[:,:,0].clone().cpu().data.numpy(),self.iteration_no)
+        self.writer.add_histogram("normal_gradient_hist_channel2", grad[:,:,1].clone().cpu().data.numpy(),self.iteration_no)
+        self.writer.add_histogram("normal_gradient_hist_channel3", grad[:,:,2].clone().cpu().data.numpy(),self.iteration_no)
+        self.writer.add_histogram("normal_gradient_hist_norm", torch.sqrt(torch.sum(grad ** 2, dim=-1)).clone().cpu().data.numpy(),self.iteration_no)
         #print('grad', grad)
 
     def tensorboard_z_hook(self, grad):
 
         self.writer.add_scalar("z_gradient_mean",
                                get_data(torch.mean(torch.abs(grad))),
-                               self.iterationa_no)
-        self.writer.add_histogram("z_gradient_hist_channel", grad.clone().cpu().data.numpy(),self.iterationa_no)
+                               self.iteration_no)
+        self.writer.add_histogram("z_gradient_hist_channel", grad.clone().cpu().data.numpy(),self.iteration_no)
 
         self.writer.add_image("z_gradient_im",
                                grad,
-                               self.iterationa_no)
+                               self.iteration_no)
 
 
     def render_batch(self, batch, batch_cond=None):
@@ -769,17 +769,17 @@ class GAN(object):
                     (H, W, 3))
                 target_worldnormalmap_img_ = get_normalmap_image(
                     target_worldnormal_)
-            if self.iterationa_no % self.opt.save_image_interval == 0:
-                imsave((inpath + str(self.iterationa_no) +
+            if self.iteration_no % self.opt.save_image_interval == 0:
+                imsave((inpath + str(self.iteration_no) +
                         'normalmap_{:05d}.png'.format(idx)),
                        target_normalmap_img_)
-                imsave((inpath + str(self.iterationa_no) +
+                imsave((inpath + str(self.iteration_no) +
                         'depthmap_{:05d}.png'.format(idx)),
                        get_data(res['depth']))
-                imsave((inpath + str(self.iterationa_no) +
+                imsave((inpath + str(self.iteration_no) +
                         'world_normalmap_{:05d}.png'.format(idx)),
                        target_worldnormalmap_img_)
-            if self.iterationa_no % 200 == 0:
+            if self.iteration_no % 200 == 0:
                 im2 = get_data(res['image'])
                 depth2 = get_data(res['depth'])
                 pos = get_data(res['pos'])
@@ -794,13 +794,13 @@ class GAN(object):
                 np.save(inpath_xyz+out_file2, depth2)
 
                 # Save xyz file
-                save_xyz((inpath_xyz + str(self.iterationa_no) +
+                save_xyz((inpath_xyz + str(self.iteration_no) +
                           'withnormal_{:05d}.xyz'.format(idx)),
                          pos=get_data(res['pos']),
                          normal=get_data(res['normal']))
 
                 # Save xyz file in world coordinates
-                save_xyz((inpath_xyz + str(self.iterationa_no) +
+                save_xyz((inpath_xyz + str(self.iteration_no) +
                           'withnormal_world_{:05d}.xyz'.format(idx)),
                          pos=get_data(world_tform['pos']),
                          normal=get_data(world_tform['normal']))
@@ -820,44 +820,44 @@ class GAN(object):
         rendered_data = torch.stack(rendered_data)
         rendered_data_depth = torch.stack(rendered_data_depth)
 
-        if self.iterationa_no % self.opt.print_interval*4 == 0 and self.in_critic == 0:
+        if self.iteration_no % self.opt.print_interval*4 == 0 and self.in_critic == 0:
             z__ = pos_out_[..., 2]
             self.writer.add_scalar("loss",
                                    loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("nloss",
                                    unit_normal_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("minz",
                                    np.min(z__),
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("maxz",
                                    np.max(z__),
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("min_normal",
                                    normals_[..., 2].min(),
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("max_normal",
                                    normals_[..., 2].max(),
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("z_loss",
                                    z_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("z_normal_loss",
                                    z_norm_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("spatial_var_loss",
                                    spatial_var_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("normal_away_loss",
                                    normal_away_from_cam_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("spatial_loss",
                                    spatial_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
             self.writer.add_scalar("im_depth_cons_loss",
                                    image_depth_consistency_loss_/self.opt.batchSize,
-                                   self.iterationa_no)
+                                   self.iteration_no)
 
             res['pos'].register_hook(self.tensorboard_pos_hook)
             res['normal'].register_hook(self.tensorboard_normal_hook)
@@ -867,7 +867,7 @@ class GAN(object):
                             'z_normal_loss: %f, spatial_var_loss: %f, '
                             'normal_away_loss: %f, nz_range: [%f, %f], '
                             'spatial_loss: %f, im_depth_cons_loss: %f' %
-                            (self.iterationa_no,
+                            (self.iteration_no,
                              loss_/self.opt.batchSize,
                              unit_normal_loss_/self.opt.batchSize,
                              z_loss_/self.opt.batchSize,
@@ -885,12 +885,12 @@ class GAN(object):
     def tensorboard_hook(self, grad):
         self.writer.add_scalar("z_gradient_mean",
                                get_data(torch.mean(grad[0])),
-                               self.iterationa_no)
-        self.writer.add_histogram("z_gradient_hist_channel", grad[0].clone().cpu().data.numpy(),self.iterationa_no)
+                               self.iteration_no)
+        self.writer.add_histogram("z_gradient_hist_channel", grad[0].clone().cpu().data.numpy(),self.iteration_no)
 
         self.writer.add_image("z_gradient_im",
                                grad[0].view(self.opt.splats_img_size,self.opt.splats_img_size),
-                               self.iterationa_no)
+                               self.iteration_no)
 
     def train(self, ):
         """Train network."""
@@ -915,13 +915,13 @@ class GAN(object):
         with open(file_name, 'wt') as l2_file:
             curr_generator_idx = 0
             for iteration in range(self.opt.n_iter):
-                self.iterationa_no = iteration
+                self.iteration_no = iteration
 
                 # Train Discriminator critic_iters times
                 for j in range(self.opt.critic_iters):
                     # Train with real
                     #################
-                    self.in_critic=1
+                    self.in_critic = 1
                     self.netD.zero_grad()
                     self.get_real_samples()
                     mu_z, logvar_z = self.netE(self.inputv)
@@ -1060,25 +1060,25 @@ class GAN(object):
                     Wassertein_D = (errD_real.data[0] - errD_fake.data[0])
                     self.writer.add_scalar("Loss_G",
                                            errG.data[0],
-                                           self.iterationa_no)
+                                           self.iteration_no)
                     self.writer.add_scalar("Loss_D",
                                            errD.data[0],
-                                           self.iterationa_no)
+                                           self.iteration_no)
                     self.writer.add_scalar("Loss_E",
                                            errE.data[0],
-                                           self.iterationa_no)
+                                           self.iteration_no)
                     self.writer.add_scalar("Reconstruction_Loss",
                                            reconstruction_loss.data[0],
-                                           self.iterationa_no)
+                                           self.iteration_no)
                     self.writer.add_scalar("Wassertein_D",
                                            Wassertein_D,
-                                           self.iterationa_no)
+                                           self.iteration_no)
                     self.writer.add_scalar("Disc_grad_norm",
                                            gnorm_D,
-                                           self.iterationa_no)
+                                           self.iteration_no)
                     self.writer.add_scalar("Gen_grad_norm",
                                            gnorm_G,
-                                           self.iterationa_no)
+                                           self.iteration_no)
 
                     print('\n[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '
                           ' Loss_D_fake: %.4f Wassertein_D: %.4f '
