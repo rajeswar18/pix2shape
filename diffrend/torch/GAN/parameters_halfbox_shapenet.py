@@ -40,6 +40,9 @@ class Parameters():
             default_root = '/home/sai/visualize/diffrend/data/cube'
             #default_out = './output'
             default_out = '/home/sai/output_newcolor_12june'
+        elif username == 'voletivi':
+            default_root = '/u/voletivi/datasets/diffrend/data/cube'
+            default_out = './render_samples'
         else:
             raise ValueError('Add the route for the dataset of your system')
 

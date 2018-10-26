@@ -1,10 +1,14 @@
 """Generator."""
 from __future__ import absolute_import
 
+import sys
+sys.path.append('../../../')
+
 import copy
 import numpy as np
 # from scipy.misc import imsave
 from imageio import imsave
+import datetime
 import os
 import shutil
 import torch
@@ -1163,6 +1167,8 @@ def main():
     """Start training."""
     # Parse args
     opt = Parameters().parse()
+
+    opt.name = "{0:%Y%m%d_%H%M%S}_{1}_{2}".format(datetime.datetime.now(), opt.name, os.path.basename(opt.root_dir.rstrip('/')))
 
     # Create experiment output folder
     exp_dir = os.path.join(opt.out_dir, opt.name)
