@@ -49,6 +49,7 @@ class ObjectsFolderMultiObjectDataset(Dataset):
             self.bg_obj = load_model(self.opt.bg_model)
             self.loaded = True
         obj_model = self.fg_obj
+        obj_model['v'] = obj_model['v'][:, :3]
         obj2 = self.bg_obj
         v1 = (obj_model['v'] - obj_model['v'].mean()) / (obj_model['v'].max() - obj_model['v'].min())
         v2 = obj2['v']  # / (obj2['v'].max() - obj2['v'].min())
