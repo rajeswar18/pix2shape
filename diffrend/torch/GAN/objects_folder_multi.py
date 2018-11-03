@@ -79,7 +79,7 @@ class ObjectsFolderMultiObjectDataset(Dataset):
             # normalize the vertices
             v = obj_model['v']
             axis_range = np.max(v, axis=0) - np.min(v, axis=0)
-            v = (v - np.mean(v, axis=0)) / max(axis_range)  # Normalize to make the largest spread 1
+            v = (v - np.mean(v2, axis=0)) / max(axis_range)  # Normalize to make the largest spread 1
             obj_model['v'] = v
             mesh = obj_to_triangle_spec(obj_model)
             meshes = {'face': mesh['face'].astype(np.float32),
