@@ -10,9 +10,10 @@ from render_image_params import opt
 start = time.time()
 
 # Fix the image size
-bpy.context.scene.render.resolution_x = opt.width
-bpy.context.scene.render.resolution_y = opt.height
-bpy.context.scene.render.resolution_percentage = 100
+im_scale = 2
+bpy.context.scene.render.resolution_x = opt.width*im_scale
+bpy.context.scene.render.resolution_y = opt.height*im_scale
+bpy.context.scene.render.resolution_percentage = 100/im_scale
 bpy.context.scene.render.image_settings.compression = 0
 
 scene = bpy.data.scenes["Scene"]
@@ -43,7 +44,7 @@ imported_object = bpy.ops.import_scene.obj(filepath=opt.obj_filepath)
 # Select the object
 # obj_object = bpy.context.selected_objects[0]
 for key in bpy.data.objects.keys():
-    if 'Camera' not in bpy.data.objects[key] and 'Point' not in bpy.data.objects[key]:
+    if 'Camera' not in key and 'Point' not in key:
         break
 
 bpy.data.objects[key].select = True
@@ -105,15 +106,40 @@ def obj_random_rot(rot_angle=None):
 i = 0
 
 # LAMPS
-# Generate batch_size # of light positions
+
+# Generate batch_size # of light positions and colors
 light_eps = 0.15
-light_pos1 = np.random.rand(opt.batch_size, 3)*opt.cam_dist + light_eps
-light_pos2 = np.random.rand(opt.batch_size, 3)*opt.cam_dist + light_eps
-light_pos3 = (3, 3, 10)
+# light_pos1 = np.random.rand(opt.batch_size, 3)*opt.cam_dist + light_eps
+# light_pos2 = np.random.rand(opt.batch_size, 3)*opt.cam_dist + light_eps
+# light_pos3 = (3, 3, 10)
+light_pos = []
+light_color = []
+for b in range(opt.batch_size):
+    light_pos_l = []
+    light_color_l = []
+    for l in range(opt.n_lights):
+        # Position
+        if opt.light_pos[l] is None:
+            light_pos_l.append(tuple(np.random.rand(3)*opt.cam_dist + light_eps))
+        else:
+            light_pos_l.append(opt.light_pos[l])
+        # Color
+        if opt.light_color[l] is None:
+            light_color_l.append((0.8, 0.8, 0.8))
+        else:
+            light_color_l.append(opt.light_color[l])
+    # Append
+    light_pos.append(light_pos_l)
+    light_color.append(light_color_l)
+
+
 # Add lamps
-bpy.ops.object.lamp_add(type='POINT', location=light_pos1[i])
-bpy.ops.object.lamp_add(type='POINT', location=light_pos2[i])
-bpy.ops.object.lamp_add(type='POINT', location=light_pos3)
+lights = []
+for l in range(opt.n_lights):
+    bpy.ops.object.lamp_add(type='POINT', location=light_pos[i][l])
+    bpy.context.object.data.color = light_color[i][l]
+    lights.append(bpy.context.selected_objects[0])
+
 # bpy.ops.object.lamp_add(type='AREA', radius=0.5, location=(0, 0, 10))
 
 # CAMERA
@@ -159,6 +185,10 @@ for i in range(1, opt.batch_size):
     looking_direction = camera.location - look_at
     rot_quat = looking_direction.to_track_quat('Z', 'Y')
     camera.rotation_euler = rot_quat.to_euler()
+    # Translate light
+    for l in range(opt.n_lights):
+        if opt.light_pos[l] is None:
+            lights[l].location = light_pos[i][l]
     # Render settings
     bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:03d}".format(i))
     # Render image

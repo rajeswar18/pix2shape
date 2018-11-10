@@ -1,6 +1,6 @@
 # FROM parameters_halfbox_shapenet
 class opt:
-    batch_size = 1000 # Number of views to generate
+    batch_size = 100 # Number of views to generate
     # Image
     width=128
     height = 128
@@ -15,6 +15,11 @@ class opt:
     phi_range = [20, 70]
     axis = [0., 1., 0.]
     lookat = [0., 0., 0.]
+    # Lights
+    n_lights = 3
+    light_pos = [None, (0.6*cam_dist, 0.8*cam_dist, 0.2*cam_dist), (0.8*cam_dist, 0.6*cam_dist, 0.8*cam_dist)]
+    light_color = [(0.8, 0.8, 0.8), (0.8, 0.1, 0.1), (0.2, 0.8, 0.2)]
+    # Render
     splats_img_size = 128
     pixel_samples = 1
     # Training
@@ -32,8 +37,9 @@ class opt:
     same_view = False
     full_sphere_sampling = False
     root_dir = "/path/pix2scene/data/cube"
+    # obj_filepath = "/home/user1/Downloads/einstein.obj"
     obj_filepath = "/home/user1/Downloads/einstein_10000.obj"
     # obj_filepath = "/home/user1/GitHubRepos/pix2scene/data/cube/cube.obj"
     # To save rendered images
-    save_image = False
+    save_image = True
     save_dir = "/home/user1/blender_experiments"
