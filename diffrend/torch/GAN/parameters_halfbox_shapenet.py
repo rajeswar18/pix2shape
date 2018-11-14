@@ -43,6 +43,9 @@ class Parameters():
         elif username == 'voletivi' or username == 'user1':
             default_root = '/u/voletivi/datasets/diffrend/data/cube'
             default_out = './render_samples'
+        elif username == 'badrinaa':
+            default_root='/u/badrinaa/pix2scene/'
+            default_out = './render_samples'
         else:
             raise ValueError('Add the route for the dataset of your system')
 
@@ -159,9 +162,9 @@ class Parameters():
         self.parser.add_argument('--focal_length', type=float, default=0.1, help='focal length')
         self.parser.add_argument('--theta', nargs=2, type=float, default=[20,80], help='Angle in degrees from the z-axis.')
         self.parser.add_argument('--phi', nargs=2, type=float, default=[20,70], help='Angle in degrees from the x-axis.')
-        self.parser.add_argument('--axis', nargs=3, default=[0.,1.,0.],type=float, help='Axis for random camera position.')
+        self.parser.add_argument('--axis', nargs=3, default=[0.7,1.,1.],type=float, help='Axis for random camera position.')
         self.parser.add_argument('--cam_pos', nargs=3, type=float, help='Camera position.')
-        self.parser.add_argument('--at', nargs=3, default=[0.05,0.0,0], type=float, help='Camera lookat position.')
+        self.parser.add_argument('--at', nargs=3, default=[0.05,0.0,0.0], type=float, help='Camera lookat position.')
         #self.parser.add_argument('--at', nargs=3, default=[ 0, 1, 0], type=float, help='Camera lookat position.')
         self.parser.add_argument('--sphere-halfbox', action='store_true', help='Renders demo sphere-halfbox')
         self.parser.add_argument('--norm_depth_image_only', action='store_true', default=False, help='Render on the normalized'
