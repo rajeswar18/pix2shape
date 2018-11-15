@@ -154,30 +154,29 @@ if opt.save_image:
 # RENDER DEPTH IMAGE
 render_depth_image(camera, os.path.join(opt.save_dir, "blender_image_{0:05d}_depth".format(i)))
 
-
-# # If batch_size > 1:
-# for i in range(1, opt.batch_size):
-#     # Randomly rotate object
-#     obj_random_rot(rot_angles[i])
-#     # Translate camera
-#     bpy.data.scenes[0].camera.location = cam_pos[i]
-#     # Make it look at lookat
-#     # looking_direction = camera.location - look_at
-#     # rot_quat = looking_direction.to_track_quat('Z', 'Y')
-#     # camera.rotation_euler = rot_quat.to_euler()
-#     make_cam_lookat(camera, find_center(obj))
-#     # Translate light
-#     for l in range(opt.n_lights):
-#         if opt.light_pos[l] is None:
-#             lights[l].location = light_pos[i][l]
-#     # Render settings
-#     bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:05d}".format(i))
-#     # Render image
-#     if opt.save_image:
-#         bpy.ops.render.render(write_still=True)
+# If batch_size > 1:
+for i in range(1, opt.batch_size):
+    # Randomly rotate object
+    obj_random_rot(obj, rot_angles[i])
+    # Translate camera
+    bpy.data.scenes[0].camera.location = cam_pos[i]
+    # Make it look at lookat
+    # looking_direction = camera.location - look_at
+    # rot_quat = looking_direction.to_track_quat('Z', 'Y')
+    # camera.rotation_euler = rot_quat.to_euler()
+    make_cam_lookat(camera, find_center(obj))
+    # Translate light
+    for l in range(opt.n_lights):
+        if opt.light_pos[l] is None:
+            lights[l].location = light_pos[i][l]
+    # Render image
+    bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:05d}".format(i))
+    if opt.save_image:
+        bpy.ops.render.render(write_still=True)
+        # Render depth image
+        render_depth_image(camera, os.path.join(opt.save_dir, "blender_image_{0:05d}_depth".format(i)))
 
 duration = time.time() - start
 
 print("Total: {0:.02f} secs".format(duration))
 print("Total per image: {0:.02f} secs".format(duration/opt.batch_size))
-

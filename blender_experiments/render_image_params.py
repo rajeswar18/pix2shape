@@ -1,6 +1,6 @@
 # FROM parameters_halfbox_shapenet
 class opt:
-    batch_size = 100 # Number of views to generate
+    batch_size = 10 # Number of views to generate
     # Image
     width=128
     height = 128
