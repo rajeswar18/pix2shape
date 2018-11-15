@@ -10,6 +10,14 @@ from render_image_params import opt
 
 start = time.time()
 
+# COPY FILES
+if not os.path.exists(opt.save_dir):
+    os.makedirs(opt.save_dir)
+
+for file in os.listdir(opt.curr_dir):
+    if os.path.splitext(file)[-1] == '.py':
+        ret = os.system('cp ' + os.path.join(opt.curr_dir, file) + ' ' + os.path.join(opt.save_dir, file))
+
 # Fix the image size
 im_scale = 2
 bpy.context.scene.render.resolution_x = opt.width*im_scale
@@ -140,6 +148,13 @@ bpy.data.scenes[0].camera = camera
 # LOOK AT
 # look_at = mathutils.Vector(opt.lookat)
 make_cam_lookat(camera, find_center(obj))
+
+# SAVE CAM_POS, LIGHT_POS
+# Save camera positions, and light positions for the unfixed lights
+np.savetxt(os.path.join(opt.save_dir, 'cam_pos.csv'), cam_pos, delimiter=',')
+for l in range(opt.n_lights):
+    if opt.light_pos[l] is None:
+        np.savetxt(os.path.join(opt.save_dir, 'light_{0:02d}_pos.csv'.format(l)), np.array(light_pos)[:, l], delimiter=',')
 
 # RENDER
 # Render settings

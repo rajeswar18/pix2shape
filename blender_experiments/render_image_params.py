@@ -1,6 +1,10 @@
+import datetime
+import os
+
 # FROM parameters_halfbox_shapenet
 class opt:
-    batch_size = 10 # Number of views to generate
+    curr_dir = os.path.dirname(os.path.realpath(__file__))
+    batch_size = 20000 # Number of views to generate
     # Image
     width=128
     height = 128
@@ -42,4 +46,4 @@ class opt:
     # obj_filepath = "/home/user1/GitHubRepos/pix2scene/data/cube/cube.obj"
     # To save rendered images
     save_image = True
-    save_dir = "/home/user1/blender_experiments"
+    save_dir = "/home/user1/blender_experiments/{0:%Y%m%d_%H%M%S}_einstein_10000".format(datetime.datetime.now())
