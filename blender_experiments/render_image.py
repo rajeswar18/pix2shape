@@ -3,6 +3,7 @@ import mathutils
 import os
 import sys
 sys.path.append('/home/user1/GitHubRepos/pix2scene/blender_experiments')
+import time
 
 from render_image_functions import *
 from render_image_params import opt
@@ -35,6 +36,8 @@ bpy.ops.mesh.primitive_plane_add(radius=plane_size, location=(0, 0, 0))
 bpy.ops.transform.rotate(value=-np.pi/2, axis=(1, 0, 0))
 bpy.ops.transform.translate(value=(plane_size, 0, plane_size))
 
+# i = 0
+i = 0
 
 # ADD OBJECT
 
@@ -47,63 +50,41 @@ for key in bpy.data.objects.keys():
     if 'Camera' not in key and 'Point' not in key:
         break
 
-bpy.data.objects[key].select = True
+obj_key = key
+obj = bpy.data.objects[obj_key]
+obj.select = True
 
 # Find objects centre
-def find_center(o):
-    vcos = [ o.matrix_world * v.co for v in o.data.vertices ]
-    findCenter = lambda l: ( max(l) + min(l) ) / 2
-    x,y,z  = [ [ v[i] for v in vcos ] for i in range(3) ]
-    return [ findCenter(axis) for axis in [x,y,z] ]
-
-o = bpy.data.objects[key]
-obj_center = find_center(o)
+obj_center = find_center(obj)
 
 # Translate obj to origin
-bpy.ops.transform.translate(value=list(-np.array(obj_center)))
+bpy.ops.transform.translate(value=-obj_center)
 
 # Flip it wrt X
-bpy.ops.transform.rotate(value=np.pi, axis=(1, 0, 0))
+# bpy.ops.transform.rotate(value=np.pi, axis=(1, 0, 0))
+rotate_object(obj, np.pi, (0, 1, 0), (0, 0, 0))
 
 # Find its max dimension
 # max_dimension = max(bpy.context.selected_objects[0].dimensions)
-max_dimension = max(bpy.data.objects[key].dimensions)
+max_dim = max(obj.dimensions)
 
 # Resize obj with a scale
-bpy.ops.transform.resize(value=(opt.new_max_dimension/max_dimension, opt.new_max_dimension/max_dimension, opt.new_max_dimension/max_dimension))
-
-# Rotate obj
-rot_angle = np.random.random(opt.batch_size)*2*np.pi
-bpy.ops.transform.rotate(value=rot_angle[i], axis=(0, 0, 1))
-
+bpy.ops.transform.resize(value=(opt.new_max_dim/max_dim, opt.new_max_dim/max_dim, opt.new_max_dim/max_dim))
 # Recenter it
-o = bpy.data.objects[key]
-obj_center = find_center(o)
-bpy.ops.transform.translate(value=list(-np.array(obj_center)))
+bpy.ops.transform.translate(value=-find_center(obj))
 
-# Translate obj, or set it to a location
-bpy.ops.transform.translate(value=(opt.new_max_dimension/2, opt.new_max_dimension/2, opt.new_max_dimension/2))
-# bpy.context.selected_objects[0].location = (opt.new_max_dimension/2, opt.new_max_dimension/2, opt.new_max_dimension/2)
+# Rotate obj randomly about its vertical axis
+rot_angles = np.random.uniform(size=opt.batch_size)*2*np.pi
+# bpy.ops.transform.rotate(value=rot_angle[i], axis=(0, 0, 1))
+# # Recenter it
+# bpy.ops.transform.translate(value=-find_center(obj))
+rotate_object(obj, rot_angles[i], (0, 0, 1), find_center(obj))
 
-def obj_random_rot(rot_angle=None):
-    # Deselect all objects
-    bpy.ops.object.select_all(action='DESELECT')
-    # Select our object
-    bpy.data.objects[key].select = True
-    # Find its center
-    obj_center = find_center(o)
-    # Translate to origin
-    bpy.ops.transform.translate(value=list(-np.array(obj_center)))
-    # Rotate about Z axis by random value
-    if rot_angle is None:
-        rot_angle = np.random.random()*2*np.pi
-    bpy.ops.transform.rotate(value=rot_angle, axis=(0, 0, 1))
-    # Translate back to good place
-    bpy.ops.transform.translate(value=(opt.new_max_dimension/2, opt.new_max_dimension/2, opt.new_max_dimension/2))
+# Translate obj to awesome location
+bpy.ops.transform.translate(value=(opt.new_max_dim/2, opt.new_max_dim/2, opt.new_max_dim/2))
 
-
-# i = 0
-i = 0
+# Don't do bpy.context.selected_objects[0].location = (opt.new_max_dim/2, opt.new_max_dim/2, opt.new_max_dim/2)
+# since obj.location could be different from find_center(obj)
 
 # LAMPS
 
@@ -132,68 +113,68 @@ for b in range(opt.batch_size):
     light_pos.append(light_pos_l)
     light_color.append(light_color_l)
 
-
 # Add lamps
 lights = []
 for l in range(opt.n_lights):
     bpy.ops.object.lamp_add(type='POINT', location=light_pos[i][l])
     bpy.context.object.data.color = light_color[i][l]
     lights.append(bpy.context.selected_objects[0])
-
-# bpy.ops.object.lamp_add(type='AREA', radius=0.5, location=(0, 0, 10))
+    # bpy.ops.object.lamp_add(type='AREA', radius=0.5, location=(0, 0, 10))
 
 # CAMERA
+
 # Generate batch_size # of camera positions
-cam_pos = uniform_sample_sphere(radius=opt.cam_dist, num_samples=opt.batch_size, theta_range=np.deg2rad(opt.theta_range), phi_range=np.deg2rad(opt.phi_range))
-look_at = mathutils.Vector(opt.lookat)
+cam_pos = uniform_sample_sphere(radius=opt.cam_dist, num_samples=opt.batch_size,
+                                theta_range=np.deg2rad(opt.theta_range), phi_range=np.deg2rad(opt.phi_range))
+
 # Add camera
 bpy.ops.object.camera_add(location=cam_pos[i], rotation=(0, 0, 0))
+camera = bpy.data.objects['Camera']
+
 # Set field of view
 bpy.context.object.data.angle = np.deg2rad(opt.fovy)
-# Set focal length
-# bpy.context.object.data.lens = opt.focal_length
-# bpy.data.cameras[-1].lens = opt.focal_length
-# Look at
-camera = bpy.data.objects['Camera']
-looking_direction = camera.location - look_at
-rot_quat = looking_direction.to_track_quat('Z', 'Y')
-camera.rotation_euler = rot_quat.to_euler()
 
+# Make this camera the camera of the scene
+bpy.data.scenes[0].camera = camera
+
+# LOOK AT
+# look_at = mathutils.Vector(opt.lookat)
+make_cam_lookat(camera, find_center(obj))
 
 # RENDER
-# Make this camera the camera of the scene
-bpy.data.scenes[0].camera = bpy.data.objects['Camera']
 # Render settings
 bpy.data.scenes[0].render.image_settings.file_format = 'PNG'
-bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:03d}".format(i))
+bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:05d}".format(i))
 # Don't render shadows
 bpy.context.scene.render.use_shadows = False
 # Render
 if opt.save_image:
     bpy.ops.render.render(write_still=True)
 
-# Delete selected object
-# bpy.ops.object.delete(use_global=False)
+# RENDER DEPTH IMAGE
+render_depth_image(camera, os.path.join(opt.save_dir, "blender_image_{0:05d}_depth".format(i)))
 
-# If batch_size > 1:
-for i in range(1, opt.batch_size):
-    # Randomly rotate object
-    obj_random_rot(rot_angle[i])
-    # Translate camera
-    bpy.data.scenes[0].camera.location = cam_pos[i]
-    # Make it look at lookat
-    looking_direction = camera.location - look_at
-    rot_quat = looking_direction.to_track_quat('Z', 'Y')
-    camera.rotation_euler = rot_quat.to_euler()
-    # Translate light
-    for l in range(opt.n_lights):
-        if opt.light_pos[l] is None:
-            lights[l].location = light_pos[i][l]
-    # Render settings
-    bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:03d}".format(i))
-    # Render image
-    if opt.save_image:
-        bpy.ops.render.render(write_still=True)
+
+# # If batch_size > 1:
+# for i in range(1, opt.batch_size):
+#     # Randomly rotate object
+#     obj_random_rot(rot_angles[i])
+#     # Translate camera
+#     bpy.data.scenes[0].camera.location = cam_pos[i]
+#     # Make it look at lookat
+#     # looking_direction = camera.location - look_at
+#     # rot_quat = looking_direction.to_track_quat('Z', 'Y')
+#     # camera.rotation_euler = rot_quat.to_euler()
+#     make_cam_lookat(camera, find_center(obj))
+#     # Translate light
+#     for l in range(opt.n_lights):
+#         if opt.light_pos[l] is None:
+#             lights[l].location = light_pos[i][l]
+#     # Render settings
+#     bpy.data.scenes[0].render.filepath = os.path.join(opt.save_dir, "blender_image_{0:05d}".format(i))
+#     # Render image
+#     if opt.save_image:
+#         bpy.ops.render.render(write_still=True)
 
 duration = time.time() - start
 

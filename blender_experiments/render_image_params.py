@@ -5,7 +5,7 @@ class opt:
     width=128
     height = 128
     # Object
-    new_max_dimension = 2
+    new_max_dim = 2
     # Camera
     cam_dist = 8
     angle = 30 # camera angle (don't need b/c lookat!)
