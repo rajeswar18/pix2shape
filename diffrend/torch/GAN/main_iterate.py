@@ -55,7 +55,7 @@ def copy_scripts_to_folder(expr_dir):
     """Copy scripts."""
     shutil.copy("twin_networks.py", expr_dir)
     shutil.copy("iterator.py", expr_dir)
-    shutil.copy("../NEstNet.py", expr_dir)
+    # shutil.copy("../NEstNet.py", expr_dir)
     shutil.copy("../params.py", expr_dir)
     shutil.copy("../renderer.py", expr_dir)
     shutil.copy("objects_folder_multi.py", expr_dir)
@@ -181,14 +181,14 @@ class GAN(object):
 
     def create_networks(self, ):
         """Create networks."""
-        self.netG, self.netG2, self.netD, self.netD2 = create_networks(
+        self.netG, self.netG2, self.netD, self.netD2, _ = create_networks(
             self.opt, verbose=True, depth_only=True)  # TODO: Remove D2 and G2
         # Create the normal estimation network which takes pointclouds in the
         # camera space and outputs the normals
-        assert self.netG2 is None
-        self.sph_normals = True
+        # assert self.netG2 is None
+        # self.sph_normals = True
         # self.netG2 = NEstNetV1_2(sph=self.sph_normals)
-        print(self.netG2)
+        # print(self.netG2)
         if not self.opt.no_cuda:
             self.netD = self.netD.cuda()
             self.netG = self.netG.cuda()
@@ -377,8 +377,7 @@ class GAN(object):
                                grad,
                                self.iteration_no)
 
-
-    def render_batch(self, batch, batch_cond,light_pos):
+    def render_batch(self, batch, batch_cond, light_pos):
         """Render a batch of splats."""
         batch_size = batch.size()[0]
 
@@ -459,7 +458,7 @@ class GAN(object):
                 else:
                     self.scene['camera']['eye'] = batch_cond[0]
 
-            self.scene['lights']['pos'][0,:3]=tch_var_f(light_pos[idx])
+            self.scene['lights']['pos'][0,:3] = tch_var_f(light_pos[idx])
             #self.scene['lights']['pos'][1,:3]=tch_var_f(self.light_pos2[idx])
 
             # Render scene
@@ -585,8 +584,8 @@ class GAN(object):
         rendered_data = torch.stack(rendered_data)
         rendered_data_depth = torch.stack(rendered_data_depth)
 
-
         return rendered_data, rendered_data_depth, loss/self.opt.batchSize
+
     def tensorboard_hook(self, grad):
         self.writer.add_scalar("z_gradient_mean",
                                get_data(torch.mean(grad[0])),
@@ -618,7 +617,7 @@ class GAN(object):
         # Start training
         train_stream = Iterator(root_dir=self.root_dir, batch_size=self.opt.batchSize)
         file_name = os.path.join(self.opt.out_dir, 'L2.txt')
-        dsize=len(train_stream)
+        dsize = len(train_stream)
 
         for epoch in range(self.opt.n_iter):
 
@@ -628,8 +627,8 @@ class GAN(object):
                 # Train with real
                 #################
                 #print("hii")
-                self.iteration_no = epoch*dsize+count
-                iteration=self.iteration_no
+                self.iteration_no = epoch*dsize + count
+                iteration = self.iteration_no
                 x, cp,lp = batch
 
                 real_data = tch_var_f(x)
@@ -664,7 +663,7 @@ class GAN(object):
                                                self.scene['camera'])
                 fake = torch.cat([fake_z, fake_n], 2)
                 fake_rendered, fd, loss = self.render_batch(
-                    fake, cam_pos,lp)
+                    fake, cam_pos, lp)
                 # Do not bp through gen
                 outD_fake = self.netD(fake_rendered.detach(),
                                       cam_pos.detach())
@@ -776,6 +775,9 @@ class GAN(object):
                           errG.data[0], errD_real.data[0], errD_fake.data[0],
                           Wassertein_D, loss.data[0],
                           self.optG_z_lr_scheduler.get_lr()[0], self.optG2_normal_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G))
+                    l2_file.write('%s\n' % (str(l2_loss.data[0])))
+                    l2_file.flush()
+                    print("written to file", str(l2_loss.data[0]))
 
                 # Save output images
                 if iteration % (self.opt.save_image_interval*5) == 0 and count >0:
