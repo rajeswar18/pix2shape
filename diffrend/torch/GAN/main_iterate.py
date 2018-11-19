@@ -192,7 +192,7 @@ class GAN(object):
         if not self.opt.no_cuda:
             self.netD = self.netD.cuda()
             self.netG = self.netG.cuda()
-            self.netG2 = self.netG2.cuda()
+            # self.netG2 = self.netG2.cuda()
 
     def create_scene(self, ):
         """Create a semi-empty scene with camera parameters."""
@@ -254,16 +254,16 @@ class GAN(object):
             self.optimizerG = optim.Adam(self.netG.parameters(),
                                          lr=self.opt.lr,
                                          betas=(self.opt.beta1, 0.999))
-            self.optimizerG2 = optim.Adam(self.netG2.parameters(),
-                                          lr=self.opt.lr,
-                                          betas=(self.opt.beta1, 0.999))
+            # self.optimizerG2 = optim.Adam(self.netG2.parameters(),
+            #                               lr=self.opt.lr,
+            #                               betas=(self.opt.beta1, 0.999))
         elif self.opt.optimizer == 'rmsprop':
             self.optimizerD = optim.RMSprop(self.netD.parameters(),
                                             lr=self.opt.lr)
             self.optimizerG = optim.RMSprop(self.netG.parameters(),
                                             lr=self.opt.lr)
-            self.optimizerG2 = optim.RMSprop(self.netG2.parameters(),
-                                             lr=self.opt.lr)
+            # self.optimizerG2 = optim.RMSprop(self.netG2.parameters(),
+            #                                  lr=self.opt.lr)
         else:
             raise ValueError('Unknown optimizer: ' + self.opt.optimizer)
 
@@ -280,12 +280,17 @@ class GAN(object):
         self.optG_z_lr_scheduler = LR_fn(
             self.optimizerG, step_size=self.opt.z_lr_sched_step,
             gamma=self.opt.z_lr_sched_gamma)
+        # self.optG2_normal_lr_scheduler = LR_fn(
+        #     self.optimizerG2, step_size=self.opt.normal_lr_sched_step,
+        #     gamma=self.opt.normal_lr_sched_gamma)
         self.optG2_normal_lr_scheduler = LR_fn(
-            self.optimizerG2, step_size=self.opt.normal_lr_sched_step,
+            step_size=self.opt.normal_lr_sched_step,
             gamma=self.opt.normal_lr_sched_gamma)
-        self.LR_SCHED_MAP = [self.optG_z_lr_scheduler,
-                             self.optG2_normal_lr_scheduler]
-        self.OPT_MAP = [self.optimizerG, self.optimizerG2]
+        # self.LR_SCHED_MAP = [self.optG_z_lr_scheduler,
+        #                      self.optG2_normal_lr_scheduler]
+        self.LR_SCHED_MAP = [self.optG_z_lr_scheduler]
+        # self.OPT_MAP = [self.optimizerG, self.optimizerG2]
+        self.OPT_MAP = [self.optimizerG]
 
     # def get_samples(self):
     #     """Get samples."""
@@ -439,12 +444,13 @@ class GAN(object):
             else:
                 z = F.relu(-batch[idx][:, 0]) + z_min
                 pos = -F.relu(-batch[idx][:, 0]) - z_min
-            normals = batch[idx][:, 1:]
+            # normals = batch[idx][:, 1:]
 
             self.scene['objects']['disk']['pos'] = pos
 
             # Normal estimation network and est_normals don't go together
-            self.scene['objects']['disk']['normal'] = normals if self.opt.est_normals is False else None
+            # self.scene['objects']['disk']['normal'] = normals if self.opt.est_normals is False else None
+            self.scene['objects']['disk']['normal'] = None
 
             # Set camera position
             if batch_cond is None:
@@ -459,7 +465,7 @@ class GAN(object):
                     self.scene['camera']['eye'] = batch_cond[0]
 
             self.scene['lights']['pos'][0,:3] = tch_var_f(light_pos[idx])
-            #self.scene['lights']['pos'][1,:3]=tch_var_f(self.light_pos2[idx])
+            #self.scene['lights']['pos'][1,:3] = tch_var_f(self.light_pos2[idx])
 
             # Render scene
             # res = render_splats_NDC(self.scene)
@@ -604,9 +610,9 @@ class GAN(object):
             print(' > Generator', self.opt.gen_model_path)
             self.netG.load_state_dict(
                 torch.load(open(self.opt.gen_model_path, 'rb')))
-            print(' > Generator2', self.opt.gen_model_path2)
-            self.netG2.load_state_dict(
-                torch.load(open(self.opt.gen_model_path2, 'rb')))
+            # print(' > Generator2', self.opt.gen_model_path2)
+            # self.netG2.load_state_dict(
+            #     torch.load(open(self.opt.gen_model_path2, 'rb')))
             print(' > Discriminator', self.opt.dis_model_path)
             self.netD.load_state_dict(
                 torch.load(open(self.opt.dis_model_path, 'rb')))
@@ -658,10 +664,11 @@ class GAN(object):
                 #################
                 self.generate_noise_vector()
                 fake_z = self.netG(self.noisev, cam_pos)
-                # The normal generator is dependent on z
-                fake_n = self.generate_normals(fake_z, cam_pos,
-                                               self.scene['camera'])
-                fake = torch.cat([fake_z, fake_n], 2)
+                # # The normal generator is dependent on z
+                # fake_n = self.generate_normals(fake_z, cam_pos,
+                #                                self.scene['camera'])
+                # fake = torch.cat([fake_z, fake_n], 2)
+                fake = fake_z
                 fake_rendered, fd, loss = self.render_batch(
                     fake, cam_pos, lp)
                 # Do not bp through gen
@@ -711,9 +718,10 @@ class GAN(object):
                     fake_z = self.netG(self.noisev, cam_pos)
                     if iteration % self.opt.print_interval*4 == 0:
                         fake_z.register_hook(self.tensorboard_hook)
-                    fake_n = self.generate_normals(fake_z, cam_pos,
-                                                   self.scene['camera'])
-                    fake = torch.cat([fake_z, fake_n], 2)
+                    # fake_n = self.generate_normals(fake_z, cam_pos,
+                    #                                self.scene['camera'])
+                    # fake = torch.cat([fake_z, fake_n], 2)
+                    fake = fake_z
                     fake_rendered, fd, loss = self.render_batch(
                         fake, cam_pos, lp)
                     outG_fake = self.netD(fake_rendered, cam_pos)

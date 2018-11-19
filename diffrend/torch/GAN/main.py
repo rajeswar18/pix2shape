@@ -217,6 +217,7 @@ def calc_gradient_penalty4(discriminator, encoder, real_data, fake_data, fake_da
 
     return gradient_penalty
 
+
 class GAN(object):
     """GAN class."""
 
@@ -423,8 +424,8 @@ class GAN(object):
         else:
             print("inbox")
             light_eps = 0.15
-            self.light_pos1 = np.random.rand(self.opt.batchSize,3)*self.opt.cam_dist + light_eps
-            self.light_pos2 = np.random.rand(self.opt.batchSize,3)*self.opt.cam_dist + light_eps
+            self.light_pos1 = np.random.rand(self.opt.batchSize, 3)*self.opt.cam_dist + light_eps
+            self.light_pos2 = np.random.rand(self.opt.batchSize, 3)*self.opt.cam_dist + light_eps
 
             # TODO: deg2rad in all the angles????
 
@@ -553,7 +554,6 @@ class GAN(object):
             self.batch_size, int(self.opt.nz), 1, 1).normal_(0, 1)
         self.noisev = Variable(self.noise)  # TODO: Add volatile=True???
 
-
     def tensorboard_pos_hook(self, grad):
 
         self.writer.add_image("position_gradient_im",
@@ -612,7 +612,6 @@ class GAN(object):
         self.writer.add_image("z_gradient_im",
                                grad,
                                self.iteration_no)
-
 
     def render_batch(self, batch, batch_cond=None):
         """Render a batch of splats."""
@@ -694,8 +693,8 @@ class GAN(object):
                 else:
                     self.scene['camera']['eye'] = batch_cond[0]
 
-            self.scene['lights']['pos'][0,:3]=tch_var_f(self.light_pos1[idx])
-            #self.scene['lights']['pos'][1,:3]=tch_var_f(self.light_pos2[idx])
+            self.scene['lights']['pos'][0,:3] = tch_var_f(self.light_pos1[idx])
+            #self.scene['lights']['pos'][1,:3] = tch_var_f(self.light_pos2[idx])
 
             # Render scene
             # res = render_splats_NDC(self.scene)
@@ -882,6 +881,7 @@ class GAN(object):
             self.output_loss_file.write(log_to_print)
             self.output_loss_file.flush()
         return rendered_data, rendered_data_depth, loss/self.opt.batchSize
+
     def tensorboard_hook(self, grad):
         self.writer.add_scalar("z_gradient_mean",
                                get_data(torch.mean(grad[0])),
