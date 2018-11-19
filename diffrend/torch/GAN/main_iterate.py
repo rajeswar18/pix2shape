@@ -30,7 +30,7 @@ from diffrend.torch.GAN.datasets import Dataset_load
 from diffrend.torch.GAN.iterator import Iterator
 from diffrend.torch.GAN.parameters_halfbox_shapenet import Parameters
 from diffrend.torch.GAN.twin_networks import create_networks
-from diffrend.torch.NEstNet import NEstNetV1_2
+# from diffrend.torch.NEstNet import NEstNetV1_2
 from diffrend.torch.params import SCENE_SPHERE_HALFBOX_0
 from diffrend.torch.renderer import (render, render_splats_along_ray,
                                      z_to_pcl_CC)
@@ -187,7 +187,7 @@ class GAN(object):
         # camera space and outputs the normals
         assert self.netG2 is None
         self.sph_normals = True
-        self.netG2 = NEstNetV1_2(sph=self.sph_normals)
+        # self.netG2 = NEstNetV1_2(sph=self.sph_normals)
         print(self.netG2)
         if not self.opt.no_cuda:
             self.netD = self.netD.cuda()
