@@ -125,7 +125,7 @@ def create_networks(opt, verbose=True, **params):
     else:
         netD2.apply(weights_init)
     # Show networks
-    netE = LatentEncoder( nz, 3, nef)
+    netE = LatentEncoder(nz, 3, nef)
     if opt.netE != '':
         netE.load_state_dict(torch.load(opt.netE))
     else:
