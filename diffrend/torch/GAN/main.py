@@ -315,7 +315,7 @@ class GAN(object):
             data, data_depth, data_cond, light_pos1 = next(self.img_iter)
             self.light_pos1 = light_pos1
             data = [tch_var_f(d).permute(2, 0, 1) for d in data]
-            data_depth = [tch_var_f(d_d).permute(2, 0, 1) for d_d in data_depth]
+            data_depth = [tch_var_f(d_d).unsqueeze(0) for d_d in data_depth]
             data_cond = [tch_var_f(cond) for cond in data_cond]
 
         # Else, render using differentiable renderer
@@ -1047,13 +1047,13 @@ class GAN(object):
                                            gnorm_G,
                                            self.iteration_no)
 
-                    print('\n[%Y%m%d_%H%M%S] [%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '
+                    print('\n[{0:%Y%m%d_%H%M%S}]'.format(datetime.datetime.now()),
+                          '[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '
                           ' Loss_D_fake: %.4f Wassertein_D: %.4f '
-                          ' L2_loss: %.4f z_lr: %.8f,  Disc_grad_norm: %.8f, Gen_grad_norm: %.8f' % (
-                          datetime.datetime.now(), iteration, self.opt.n_iter, errD.data[0],
-                          errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0], errD_fake.data[0],
-                          Wassertein_D, loss.data[0],
-                          self.optG_z_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G))
+                          ' L2_loss: %.4f z_lr: %.8f,  Disc_grad_norm: %.8f, Gen_grad_norm: %.8f\n' % (
+                          iteration, self.opt.n_iter, errD.data[0], errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0],
+                          errD_fake.data[0], Wassertein_D,
+                          loss.data[0], self.optG_z_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G))
                     l2_file.write('%s\n' % (str(l2_loss.data[0])))
                     l2_file.flush()
                     print("written to file", str(l2_loss.data[0]))

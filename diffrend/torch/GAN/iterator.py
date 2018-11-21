@@ -54,7 +54,7 @@ class Iterator(object):
 
         # Return batch of images, cam_pos, light_pos
         batch_images = [imread(self.image_paths[idx])[:, :, :3] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
-        batch_depth_images = [imread(self.depth_image_paths[idx])[:, :, :3] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
+        batch_depth_images = [imread(self.depth_image_paths[idx], flatten=True) for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
         batch_cam_pos = [self.cam_pos[idx] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
         batch_light_pos1 = [self.light_pos1[idx] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
 
