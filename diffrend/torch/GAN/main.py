@@ -312,9 +312,10 @@ class GAN(object):
 
         # If iterate through already rendered images
         if self.opt.img_iterate:
-            data, data_depth, data_cond = next(self.img_iter)
-            data = [tch_var_f(d) for d in data]
-            data_depth = [tch_var_f(d_d) for d_d in data_depth]
+            data, data_depth, data_cond, light_pos1 = next(self.img_iter)
+            self.light_pos1 = light_pos1
+            data = [tch_var_f(d).permute(2, 0, 1) for d in data]
+            data_depth = [tch_var_f(d_d).permute(2, 0, 1) for d_d in data_depth]
             data_cond = [tch_var_f(cond) for cond in data_cond]
 
         # Else, render using differentiable renderer
@@ -834,7 +835,7 @@ class GAN(object):
 
         # Load image & cam_pos iterator if required
         if self.opt.img_iterate:
-            self.img_iter = Iterator(root_dir=self.root_dir, batch_size=self.opt.batchSize, shuffle=True)
+            self.img_iter = Iterator(root_dir=self.opt.root_dir, batch_size=self.opt.batchSize, shuffle=True)
 
         # Start training
         file_name = os.path.join(self.opt.out_dir, 'L2.txt')

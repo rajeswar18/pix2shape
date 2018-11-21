@@ -17,13 +17,13 @@ class Iterator(object):
         self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'img',  '*.png')))
         self.depth_image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'depth',  '*.png')))
         self.cam_pos = np.loadtxt(os.path.join(self.root_dir, 'cam_pos.csv'), delimiter=',')
-        self.light_pos = np.loadtxt(os.path.join(self.root_dir, 'light_00_pos.csv'), delimiter=',')
+        self.light_pos1 = np.loadtxt(os.path.join(self.root_dir, 'light_00_pos.csv'), delimiter=',')
 
         if nb_sub is not None:
             self.image_paths = self.image_paths[:nb_sub]
             self.depth_image_paths = self.depth_image_paths[:nb_sub]
             self.cam_pos = self.cam_pos[:nb_sub]
-            self.light_pos = self.light_pos[:nb_sub]
+            self.light_pos1 = self.light_pos1[:nb_sub]
 
         # Indices for returning batches, possibly shuffled order of images
         self.idx = np.arange(len(self))
@@ -56,8 +56,8 @@ class Iterator(object):
         batch_images = [imread(self.image_paths[idx])[:, :, :3] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
         batch_depth_images = [imread(self.depth_image_paths[idx])[:, :, :3] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
         batch_cam_pos = [self.cam_pos[idx] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
-        # batch_light_pos = [self.light_pos[idx] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
+        batch_light_pos1 = [self.light_pos1[idx] for idx in self.idx[self.batch_idx:self.batch_idx+self.batch_size]]
 
         self.batch_idx += self.batch_size
 
-        return batch_images, batch_depth_images, batch_cam_pos
+        return batch_images, batch_depth_images, batch_cam_pos, batch_light_pos1
