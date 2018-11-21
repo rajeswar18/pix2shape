@@ -147,7 +147,8 @@ bpy.data.scenes[0].camera = camera
 
 # LOOK AT
 # look_at = mathutils.Vector(opt.lookat)
-make_cam_lookat(camera, find_center(obj))
+# make_cam_lookat(camera, find_center(obj))
+make_cam_lookat(camera, mathutils.Vector(opt.lookat))
 
 # SAVE CAM_POS, LIGHT_POS
 # Save camera positions, and light positions for the unfixed lights
@@ -176,10 +177,8 @@ for i in range(1, opt.batch_size):
     # Translate camera
     bpy.data.scenes[0].camera.location = cam_pos[i]
     # Make it look at lookat
-    # looking_direction = camera.location - look_at
-    # rot_quat = looking_direction.to_track_quat('Z', 'Y')
-    # camera.rotation_euler = rot_quat.to_euler()
-    make_cam_lookat(camera, find_center(obj))
+    # make_cam_lookat(camera, find_center(obj))
+    make_cam_lookat(camera, mathutils.Vector(opt.lookat))
     # Translate light
     for l in range(opt.n_lights):
         if opt.light_pos[l] is None:
