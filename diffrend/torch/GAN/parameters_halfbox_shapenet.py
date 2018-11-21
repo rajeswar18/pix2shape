@@ -47,6 +47,7 @@ class Parameters():
             raise ValueError('Add the route for the dataset of your system')
 
         # Dataset parameters
+        self.parser.add_argument('--img_iterate', action='store_true', default=False, help='Iterate through images in root_dir/img, instead of rendering them')
         self.parser.add_argument('--dataset', type=str, default='objects_folder_multi',
                                  help='dataset name: [shapenet, objects_folder, objects_folder]')#laptop,pistol
         #self.parser.add_argument('--dataset', type=str, default='objects_folder', help='dataset name: [shapenet, objects_folder]')

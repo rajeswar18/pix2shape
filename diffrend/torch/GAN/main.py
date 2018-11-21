@@ -4,42 +4,46 @@ from __future__ import absolute_import
 import sys
 sys.path.append('../../../')
 
+import matplotlib
+matplotlib.use('Agg')
+# from matplotlib import pyplot as plt
+# from mpl_toolkits.mplot3d import axes3d
+
 import copy
-import numpy as np
-# from scipy.misc import imsave
-from imageio import imsave
 import datetime
+import itertools
+import numpy as np
 import os
 import shutil
 import torch
-import itertools
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from torch.autograd import Variable
-import torch.nn.functional as F
 import torchvision
+
+from imageio import imsave
+# from scipy.misc import imsave
+from tensorboardX import SummaryWriter
+from torch.autograd import Variable
+
 from diffrend.torch.GAN.datasets import Dataset_load
-from diffrend.torch.GAN.twin_networks import create_networks
+from diffrend.torch.GAN.iterator import Iterator
 from diffrend.torch.GAN.parameters_halfbox_shapenet import Parameters
+from diffrend.torch.GAN.twin_networks import create_networks
 from diffrend.torch.params import SCENE_SPHERE_HALFBOX_0
+from diffrend.torch.renderer import (render, render_splats_along_ray,
+                                     z_to_pcl_CC)
 from diffrend.torch.utils import (tch_var_f, tch_var_l, get_data,
                                   get_normalmap_image, cam_to_world,
                                   unit_norm2_L2loss, normal_consistency_cost,
                                   away_from_camera_penalty, spatial_3x3,
                                   depth_rgb_gradient_consistency,
                                   grad_spatial2d)
-from diffrend.torch.renderer import (render, render_splats_along_ray,
-                                     z_to_pcl_CC)
 from diffrend.utils.sample_generator import uniform_sample_sphere
 from diffrend.utils.utils import contrast_stretch_percentile, save_xyz
-from tensorboardX import SummaryWriter
 
-import matplotlib
-matplotlib.use('Agg')
-# from matplotlib import pyplot as plt
-# from mpl_toolkits.mplot3d import axes3d
 
 """
  z_noise -> z_distance_generator -> proj_to_scene_in_CC ->
@@ -50,12 +54,13 @@ matplotlib.use('Agg')
 
 def copy_scripts_to_folder(expr_dir):
     """Copy scripts."""
-    shutil.copy("twin_networks.py", expr_dir)
-    shutil.copy("../params.py", expr_dir)
-    shutil.copy("../renderer.py", expr_dir)
+    shutil.copy("iterator.py", expr_dir)
     shutil.copy("datasets.py", expr_dir)
     shutil.copy("objects_folder_multi.py", expr_dir)
     shutil.copy("parameters_halfbox_shapenet.py", expr_dir)
+    shutil.copy("twin_networks.py", expr_dir)
+    shutil.copy("../params.py", expr_dir)
+    shutil.copy("../renderer.py", expr_dir)
     shutil.copy(__file__, expr_dir)
 
 
@@ -119,101 +124,6 @@ def calc_gradient_penalty(discriminator, encoder, real_data, fake_data, fake_dat
         create_graph=True, retain_graph=True, only_inputs=True)[0]
     gradients = gradients.contiguous().view(gradients.size(0), -1)
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda
-
-    return gradient_penalty
-
-
-def calc_gradient_penalty2(discriminator, encoder, real_data, fake_data, fake_data_cond, z, z_enc,
-                          gp_lambda):
-    """Calculate GP."""
-    assert real_data.size(0) == fake_data.size(0)
-    alpha = torch.rand(real_data.size(0), 1, 1, 1)
-    alpha = alpha.expand(real_data.size())
-    alpha = alpha.cuda()
-
-    interpolates = Variable(alpha * real_data + ((1 - alpha) * fake_data),
-                            requires_grad=True)
-
-    interpolate_mu_z, interpolate_logvar_z = encoder(interpolates)
-
-    interpolate_z = gauss_reparametrize(interpolate_mu_z, interpolate_logvar_z)
-
-    interpolate_z2 = Variable(interpolate_z.data, requires_grad=True)
-    interpolates_cond = Variable(fake_data_cond, requires_grad=True)
-    disc_interpolates = discriminator(interpolates, interpolates_cond, interpolate_z2)
-    gradients = torch.autograd.grad(
-        outputs=disc_interpolates, inputs=interpolates,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True, retain_graph=True, only_inputs=True)[0]
-
-    gradients_z = torch.autograd.grad(
-        outputs=disc_interpolates, inputs=interpolate_z2,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True, retain_graph=True, only_inputs=True)[0]
-    gradients = gradients.contiguous().view(gradients.size(0), -1)
-    gradients_z = gradients_z.contiguous().view(gradients_z.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda + ((gradients_z.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda
-
-    return gradient_penalty
-
-
-def calc_gradient_penalty3(discriminator, encoder, real_data, fake_data, fake_data_cond, z, z_enc,
-                          gp_lambda):
-    """Calculate GP."""
-    assert real_data.size(0) == fake_data.size(0)
-    alpha = torch.rand(real_data.size(0), 1, 1, 1)
-    alpha = alpha.expand(real_data.size())
-    alpha = alpha.cuda()
-
-    alpha_z = torch.rand(z.size(0), 1, 1, 1)
-    alpha_z = alpha_z.expand(z.size())
-    alpha_z = alpha_z.cuda()
-
-    interpolates = Variable(alpha * real_data + ((1 - alpha) * fake_data),
-                            requires_grad=True)
-    interpolate_z = Variable(alpha_z * z_enc + ((1 - alpha_z) * z),
-                            requires_grad=True)
-    interpolates_cond = Variable(fake_data_cond, requires_grad=True)
-    disc_interpolates = discriminator(interpolates, interpolates_cond, interpolate_z)
-    gradients = torch.autograd.grad(
-        outputs=disc_interpolates, inputs=interpolates,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True, retain_graph=True, only_inputs=True)[0]
-    gradients = gradients.contiguous().view(gradients.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda
-
-    return gradient_penalty
-
-def calc_gradient_penalty4(discriminator, encoder, real_data, fake_data, fake_data_cond, z, z_enc,
-                          gp_lambda):
-    """Calculate GP."""
-    assert real_data.size(0) == fake_data.size(0)
-    alpha = torch.rand(real_data.size(0), 1, 1, 1)
-    alpha = alpha.expand(real_data.size())
-    alpha = alpha.cuda()
-
-    alpha_z = torch.rand(z.size(0), 1, 1, 1)
-    alpha_z = alpha_z.expand(z.size())
-    alpha_z = alpha_z.cuda()
-
-    interpolates = Variable(alpha * real_data + ((1 - alpha) * fake_data),
-                            requires_grad=True)
-    interpolate_z = Variable(alpha_z * z_enc + ((1 - alpha_z) * z),
-                            requires_grad=True)
-    interpolates_cond = Variable(fake_data_cond, requires_grad=True)
-    disc_interpolates = discriminator(interpolates, interpolates_cond, interpolate_z)
-    gradients = torch.autograd.grad(
-        outputs=disc_interpolates, inputs=interpolates,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True, retain_graph=True, only_inputs=True)[0]
-
-    gradients_z = torch.autograd.grad(
-        outputs=disc_interpolates, inputs=interpolate_z,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True, retain_graph=True, only_inputs=True)[0]
-    gradients = gradients.contiguous().view(gradients.size(0), -1)
-    gradients_z = gradients_z.contiguous().view(gradients_z.size(0), -1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda + ((gradients_z.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda
 
     return gradient_penalty
 
@@ -355,14 +265,14 @@ class GAN(object):
             self.optimizerD = optim.Adam(self.netD.parameters(),
                                          lr=self.opt.lr,
                                          betas=(self.opt.beta1, 0.999))
-            self.optimizerG = optim.Adam(itertools.chain(self.netG.parameters(),self.netE.parameters()),
+            self.optimizerG = optim.Adam(itertools.chain(self.netG.parameters(), self.netE.parameters()),
                                          lr=self.opt.lr,
                                          betas=(self.opt.beta1, 0.999))
 
         elif self.opt.optimizer == 'rmsprop':
             self.optimizerD = optim.RMSprop(self.netD.parameters(),
                                             lr=self.opt.lr)
-            self.optimizerG = optim.RMSprop(itertools.chain(self.netG.parameters(),self.netE.parameters()),
+            self.optimizerG = optim.RMSprop(itertools.chain(self.netG.parameters(), self.netE.parameters()),
                                             lr=self.opt.lr)
 
         else:
@@ -399,152 +309,164 @@ class GAN(object):
 
     def get_real_samples(self):
         """Get a real sample."""
-        # Define the camera poses
-        if not self.opt.same_view:
-            if self.opt.full_sphere_sampling:
-                self.cam_pos = uniform_sample_sphere(
-                    radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
-                    axis=None, angle=self.opt.angle,
-                    theta_range=np.deg2rad(self.opt.theta), phi_range=np.deg2rad(self.opt.phi))
-            else:
-                self.cam_pos = uniform_sample_sphere(
+
+        # If iterate through already rendered images
+        if self.opt.img_iterate:
+            data, data_depth, data_cond = next(self.img_iter)
+            data = [tch_var_f(d) for d in data]
+            data_depth = [tch_var_f(d_d) for d_d in data_depth]
+            data_cond = [tch_var_f(cond) for cond in data_cond]
+
+        # Else, render using differentiable renderer
+        else:
+
+            data, data_depth, data_normal, data_cond = [], [], [], []
+
+            # Define the camera poses
+            if not self.opt.same_view:
+                if self.opt.full_sphere_sampling:
+                    self.cam_pos = uniform_sample_sphere(
+                        radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
+                        axis=None, angle=self.opt.angle,
+                        theta_range=np.deg2rad(self.opt.theta), phi_range=np.deg2rad(self.opt.phi))
+                else:
+                    self.cam_pos = uniform_sample_sphere(
+                        radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
+                        axis=None, angle=self.opt.angle,
+                        theta_range=np.deg2rad(self.opt.theta),
+                        phi_range=np.deg2rad(self.opt.phi))
+            if  self.opt.full_sphere_sampling_light:
+                self.light_pos1 = uniform_sample_sphere(
                     radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
                     axis=None, angle=self.opt.angle,
                     theta_range=np.deg2rad(self.opt.theta),
                     phi_range=np.deg2rad(self.opt.phi))
-        if  self.opt.full_sphere_sampling_light:
-            self.light_pos1 = uniform_sample_sphere(
-                radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
-                axis=None, angle=self.opt.angle,
-                theta_range=np.deg2rad(self.opt.theta),
-                phi_range=np.deg2rad(self.opt.phi))
-            # self.light_pos2 = uniform_sample_sphere(radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
-            #                                      axis=self.opt.axis, angle=np.deg2rad(40),
-            #                                      theta_range=self.opt.theta, phi_range=self.opt.phi)
-        else:
-            print("inbox")
-            light_eps = 0.15
-            self.light_pos1 = np.random.rand(self.opt.batchSize, 3)*self.opt.cam_dist + light_eps
-            self.light_pos2 = np.random.rand(self.opt.batchSize, 3)*self.opt.cam_dist + light_eps
+                # self.light_pos2 = uniform_sample_sphere(radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
+                #                                      axis=self.opt.axis, angle=np.deg2rad(40),
+                #                                      theta_range=self.opt.theta, phi_range=self.opt.phi)
+            else:
+                print("inbox")
+                light_eps = 0.15
+                self.light_pos1 = np.random.rand(self.opt.batchSize, 3)*self.opt.cam_dist + light_eps
+                self.light_pos2 = np.random.rand(self.opt.batchSize, 3)*self.opt.cam_dist + light_eps
 
-            # TODO: deg2rad in all the angles????
+                # TODO: deg2rad in all the angles????
 
-        # Create a splats rendering scene
-        large_scene = create_scene(self.opt.width, self.opt.height,
-                                   self.opt.fovy, self.opt.focal_length,
-                                   self.opt.n_splats)
-        lookat = self.opt.at if self.opt.at is not None else [0.0, 0.0, 0.0, 1.0]
-        large_scene['camera']['at'] = tch_var_f(lookat)
+            # Create a splats rendering scene
+            large_scene = create_scene(self.opt.width, self.opt.height,
+                                       self.opt.fovy, self.opt.focal_length,
+                                       self.opt.n_splats)
+            lookat = self.opt.at if self.opt.at is not None else [0.0, 0.0, 0.0, 1.0]
+            large_scene['camera']['at'] = tch_var_f(lookat)
 
-        # Render scenes
-        data, data_depth, data_normal, data_cond = [], [], [], []
-        inpath = self.opt.vis_images + '/'
-        for idx in range(self.opt.batchSize):
-            # Save the splats into the rendering scene
-            if self.opt.use_mesh:
-                if 'sphere' in large_scene['objects']:
-                    del large_scene['objects']['sphere']
-                if 'disk' in large_scene['objects']:
-                    del large_scene['objects']['disk']
-                if 'triangle' not in large_scene['objects']:
-                    large_scene['objects'] = {
-                        'triangle': {'face': None, 'normal': None,
+            # Render scenes
+            inpath = self.opt.vis_images + '/'
+            for idx in range(self.opt.batchSize):
+                # Save the splats into the rendering scene
+                if self.opt.use_mesh:
+                    if 'sphere' in large_scene['objects']:
+                        del large_scene['objects']['sphere']
+                    if 'disk' in large_scene['objects']:
+                        del large_scene['objects']['disk']
+                    if 'triangle' not in large_scene['objects']:
+                        large_scene['objects'] = {
+                            'triangle': {'face': None, 'normal': None,
+                                         'material_idx': None}}
+                    samples = self.get_samples()
+
+                    large_scene['objects']['triangle']['material_idx'] = tch_var_l(
+                        np.zeros(samples['mesh']['face'][0].shape[0],
+                                 dtype=int).tolist())
+                    large_scene['objects']['triangle']['face'] = Variable(
+                        samples['mesh']['face'][0].cuda(), requires_grad=False)
+                    large_scene['objects']['triangle']['normal'] = Variable(
+                        samples['mesh']['normal'][0].cuda(),
+                        requires_grad=False)
+                else:
+                    if 'sphere' in large_scene['objects']:
+                        del large_scene['objects']['sphere']
+                    if 'triangle' in large_scene['objects']:
+                        del large_scene['objects']['triangle']
+                    if 'disk' not in large_scene['objects']:
+                        large_scene['objects'] = {
+                            'disk': {'pos': None,
+                                     'normal': None,
                                      'material_idx': None}}
-                samples = self.get_samples()
+                    large_scene['objects']['disk']['radius'] = tch_var_f(
+                        np.ones(self.opt.n_splats) * self.opt.splats_radius)
+                    large_scene['objects']['disk']['material_idx'] = tch_var_l(
+                        np.zeros(self.opt.n_splats, dtype=int).tolist())
+                    large_scene['objects']['disk']['pos'] = Variable(
+                        samples['splats']['pos'][idx].cuda(),
+                        requires_grad=False)
+                    large_scene['objects']['disk']['normal'] = Variable(
+                        samples['splats']['normal'][idx].cuda(),
+                        requires_grad=False)
 
-                large_scene['objects']['triangle']['material_idx'] = tch_var_l(
-                    np.zeros(samples['mesh']['face'][0].shape[0],
-                             dtype=int).tolist())
-                large_scene['objects']['triangle']['face'] = Variable(
-                    samples['mesh']['face'][0].cuda(), requires_grad=False)
-                large_scene['objects']['triangle']['normal'] = Variable(
-                    samples['mesh']['normal'][0].cuda(),
-                    requires_grad=False)
-            else:
-                if 'sphere' in large_scene['objects']:
-                    del large_scene['objects']['sphere']
-                if 'triangle' in large_scene['objects']:
-                    del large_scene['objects']['triangle']
-                if 'disk' not in large_scene['objects']:
-                    large_scene['objects'] = {
-                        'disk': {'pos': None,
-                                 'normal': None,
-                                 'material_idx': None}}
-                large_scene['objects']['disk']['radius'] = tch_var_f(
-                    np.ones(self.opt.n_splats) * self.opt.splats_radius)
-                large_scene['objects']['disk']['material_idx'] = tch_var_l(
-                    np.zeros(self.opt.n_splats, dtype=int).tolist())
-                large_scene['objects']['disk']['pos'] = Variable(
-                    samples['splats']['pos'][idx].cuda(),
-                    requires_grad=False)
-                large_scene['objects']['disk']['normal'] = Variable(
-                    samples['splats']['normal'][idx].cuda(),
-                    requires_grad=False)
+                # Set camera position
+                if not self.opt.same_view:
+                    large_scene['camera']['eye'] = tch_var_f(self.cam_pos[idx])
+                else:
+                    large_scene['camera']['eye'] = tch_var_f(self.cam_pos[0])
 
-            # Set camera position
-            if not self.opt.same_view:
-                large_scene['camera']['eye'] = tch_var_f(self.cam_pos[idx])
-            else:
-                large_scene['camera']['eye'] = tch_var_f(self.cam_pos[0])
+                large_scene['lights']['pos'][0, :3]=tch_var_f(self.light_pos1[idx])
+                #large_scene['lights']['pos'][1,:3]=tch_var_f(self.light_pos2[idx])
 
-            large_scene['lights']['pos'][0,:3]=tch_var_f(self.light_pos1[idx])
-            #large_scene['lights']['pos'][1,:3]=tch_var_f(self.light_pos2[idx])
+                # Render scene
+                res = render(large_scene,
+                             norm_depth_image_only=self.opt.norm_depth_image_only,
+                             double_sided=True, use_quartic=self.opt.use_quartic)
 
-            # Render scene
-            res = render(large_scene,
-                         norm_depth_image_only=self.opt.norm_depth_image_only,
-                         double_sided=True, use_quartic=self.opt.use_quartic)
+                # Get rendered output
+                if self.opt.render_img_nc == 1:
+                    depth = res['depth']
+                    im_d = depth.unsqueeze(0)
+                else:
+                    depth = res['depth']
+                    im_d = depth.unsqueeze(0)
+                    im = res['image'].permute(2, 0, 1)
+                    target_normal_ = get_data(res['normal'])
+                    target_normalmap_img_ = get_normalmap_image(target_normal_)
+                    im_n = tch_var_f(
+                        target_normalmap_img_).view(im.shape[1], im.shape[2],
+                                                    3).permute(2, 0, 1)
 
-            # Get rendered output
-            if self.opt.render_img_nc == 1:
-                depth = res['depth']
-                im_d = depth.unsqueeze(0)
-            else:
-                depth = res['depth']
-                im_d = depth.unsqueeze(0)
-                im = res['image'].permute(2, 0, 1)
-                target_normal_ = get_data(res['normal'])
-                target_normalmap_img_ = get_normalmap_image(target_normal_)
-                im_n = tch_var_f(
-                    target_normalmap_img_).view(im.shape[1], im.shape[2],
-                                                3).permute(2, 0, 1)
+                # Add depth image to the output structure
+                if self.iteration_no % self.opt.save_image_interval == 0:
+                    imsave((inpath + str(self.iteration_no) +
+                            'real_normalmap_{:05d}.png'.format(idx)),
+                           target_normalmap_img_)
+                    imsave((inpath + str(self.iteration_no) +
+                            'real_depth_{:05d}.png'.format(idx)), get_data(depth))
+                    # imsave(inpath + str(self.iteration_no) + 'real_depthmap_{:05d}.png'.format(idx), im_d)
+                    # imsave(inpath + str(self.iteration_no) + 'world_normalmap_{:05d}.png'.format(idx), target_worldnormalmap_img_)
+                data.append(im)
+                data_depth.append(im_d)
+                data_normal.append(im_n)
+                data_cond.append(large_scene['camera']['eye'])
 
-            # Add depth image to the output structure
-            if self.iteration_no % self.opt.save_image_interval == 0:
-                imsave((inpath + str(self.iteration_no) +
-                        'real_normalmap_{:05d}.png'.format(idx)),
-                       target_normalmap_img_)
-                imsave((inpath + str(self.iteration_no) +
-                        'real_depth_{:05d}.png'.format(idx)), get_data(depth))
-                # imsave(inpath + str(self.iteration_no) + 'real_depthmap_{:05d}.png'.format(idx), im_d)
-                # imsave(inpath + str(self.iteration_no) + 'world_normalmap_{:05d}.png'.format(idx), target_worldnormalmap_img_)
-            data.append(im)
-            data_depth.append(im_d)
-            data_normal.append(im_n)
-            data_cond.append(large_scene['camera']['eye'])
         # Stack real samples
         real_samples = torch.stack(data)
         real_samples_depth = torch.stack(data_depth)
-        real_samples_normal = torch.stack(data_normal)
+        # real_samples_normal = torch.stack(data_normal)
         real_samples_cond = torch.stack(data_cond)
         self.batch_size = real_samples.size(0)
         if not self.opt.no_cuda:
             real_samples = real_samples.cuda()
             real_samples_depth = real_samples_depth.cuda()
-            real_samples_normal = real_samples_normal.cuda()
+            # real_samples_normal = real_samples_normal.cuda()
             real_samples_cond = real_samples_cond.cuda()
 
         # Set input/output variables
-
         self.input.resize_as_(real_samples.data).copy_(real_samples.data)
         self.input_depth.resize_as_(real_samples_depth.data).copy_(real_samples_depth.data)
-        self.input_normal.resize_as_(real_samples_normal.data).copy_(real_samples_normal.data)
+        # self.input_normal.resize_as_(real_samples_normal.data).copy_(real_samples_normal.data)
         self.input_cond.resize_as_(real_samples_cond.data).copy_(real_samples_cond.data)
         self.label.resize_(self.batch_size).fill_(self.real_label)
         # TODO: Remove Variables
         self.inputv = Variable(self.input)
         self.inputv_depth = Variable(self.input_depth)
-        self.inputv_normal = Variable(self.input_normal)
+        # self.inputv_normal = Variable(self.input_normal)
         self.inputv_cond = Variable(self.input_cond)
         self.labelv = Variable(self.label)
 
@@ -693,7 +615,7 @@ class GAN(object):
                 else:
                     self.scene['camera']['eye'] = batch_cond[0]
 
-            self.scene['lights']['pos'][0,:3] = tch_var_f(self.light_pos1[idx])
+            self.scene['lights']['pos'][0, :3] = tch_var_f(self.light_pos1[idx])
             #self.scene['lights']['pos'][1,:3] = tch_var_f(self.light_pos2[idx])
 
             # Render scene
@@ -861,7 +783,6 @@ class GAN(object):
             res['pos'].register_hook(self.tensorboard_pos_hook)
             res['normal'].register_hook(self.tensorboard_normal_hook)
 
-
             log_to_print = ('it: %d. loss: %f nloss: %f z_loss:%f [%f, %f], '
                             'z_normal_loss: %f, spatial_var_loss: %f, '
                             'normal_away_loss: %f, nz_range: [%f, %f], '
@@ -892,8 +813,9 @@ class GAN(object):
                                grad[0].view(self.opt.splats_img_size,self.opt.splats_img_size),
                                self.iteration_no)
 
-    def train(self, ):
+    def train(self):
         """Train network."""
+
         # Load pretrained model if required
         if self.opt.gen_model_path is not None:
             print("Reloading networks from")
@@ -910,27 +832,47 @@ class GAN(object):
             self.netD2.load_state_dict(
                 torch.load(open(self.opt.dis_model_path2, 'rb')))
 
+        # Load image & cam_pos iterator if required
+        if self.opt.img_iterate:
+            self.img_iter = Iterator(root_dir=self.root_dir, batch_size=self.opt.batchSize, shuffle=True)
+
         # Start training
         file_name = os.path.join(self.opt.out_dir, 'L2.txt')
         with open(file_name, 'wt') as l2_file:
+
             curr_generator_idx = 0
+
             for iteration in range(self.opt.n_iter):
+
                 self.iteration_no = iteration
+
+                ############################
+                # (1) Update D network
+                ############################
 
                 # Train Discriminator critic_iters times
                 for j in range(self.opt.critic_iters):
-                    # Train with real
-                    #################
+
                     self.in_critic = 1
                     self.netD.zero_grad()
-                    self.get_real_samples()
-                    mu_z, logvar_z = self.netE(self.inputv)
 
+                    # Train D with real
+                    #################
+
+                    # Get real samples:
+                    # inputv, inputv_depth, inputv_normal, inputv_cond, labelv
+                    self.get_real_samples()
+
+                    # Get z from x (for ALI)
+                    # z <--GaussReparam-- mu, var <--E-- x
+                    mu_z, logvar_z = self.netE(self.inputv)
                     z_real = gauss_reparametrize(mu_z, logvar_z)
 
+                    # Get discriminator output
                     # input_D = torch.cat([self.inputv, self.inputv_depth], 1)
                     real_output = self.netD(self.inputv, self.inputv_cond.detach(), z_real.detach())
 
+                    # Backprop thru D
                     if self.opt.criterion == 'GAN':
                         errD_real = self.criterion(real_output, self.labelv)
                         errD_real.backward()
@@ -940,17 +882,23 @@ class GAN(object):
                     else:
                         raise ValueError('Unknown GAN criterium')
 
-                    # Train with fake
+                    # Train D with fake
                     #################
+
+                    # Render fake data
+                    # noise --G--> z --render--> x
                     self.generate_noise_vector()
                     fake_z = self.netG(self.noisev, self.inputv_cond)
                     # The normal generator is dependent on z
-
                     fake_rendered, fd, loss = self.render_batch(
                         fake_z, self.inputv_cond)
-                    # Do not bp through gen
+
+                    # Get discriminator output
+                    # Do not bp through G
                     outD_fake = self.netD(fake_rendered.detach(),
                                           self.inputv_cond.detach(),self.noisev.detach())
+
+                    # Backprop thru D
                     if self.opt.criterion == 'GAN':
                         labelv = Variable(self.label.fill_(self.fake_label))
                         errD_fake = self.criterion(outD_fake, labelv)
@@ -963,7 +911,7 @@ class GAN(object):
                     else:
                         raise ValueError('Unknown GAN criterium')
 
-                    # Compute gradient penalty
+                    # Compute gradient penalty, and backprop thru D
                     if self.opt.gp != 'None':
                         gradient_penalty = calc_gradient_penalty(
                             self.netD, self.netE, self.inputv.data, fake_rendered.data,
@@ -971,11 +919,13 @@ class GAN(object):
                         gradient_penalty.backward()
                         errD += gradient_penalty
 
+                    # Perform gradient clipping
                     gnorm_D = torch.nn.utils.clip_grad_norm(
                         self.netD.parameters(), self.opt.max_gnorm)  # TODO
 
-                    # Update weight
+                    # Update weights of D
                     self.optimizerD.step()
+
                     # Clamp critic weigths if not GP and if WGAN
                     if self.opt.criterion == 'WGAN' and self.opt.gp == 'None':
                         for p in self.netD.parameters():
@@ -983,22 +933,30 @@ class GAN(object):
 
                 ############################
                 # (2) Update G network
-                ###########################
+                ############################
+
+                self.in_critic = 0
+                self.netG.zero_grad()
+                self.netE.zero_grad()
+
                 # To avoid computation
                 # for p in self.netD.parameters():
                 #     p.requires_grad = False
-                self.netG.zero_grad()
-                self.netE.zero_grad()
-                self.in_critic=0
+
+                # Render fake samples
+                # noise --G--> z --render--> x
                 self.generate_noise_vector()
                 fake_z = self.netG(self.noisev, self.inputv_cond)
+                fake_rendered, fd, loss = self.render_batch(
+                    fake_z, self.inputv_cond)
+
                 if iteration % self.opt.print_interval*4 == 0:
                     fake_z.register_hook(self.tensorboard_hook)
 
-                fake_rendered, fd, loss = self.render_batch(
-                    fake_z, self.inputv_cond)
+                # Get discriminator output for fake
                 outG_fake = self.netD(fake_rendered, self.inputv_cond, self.noisev)
 
+                # Backprop thru G
                 if self.opt.criterion == 'GAN':
                     # Fake labels are real for generator cost
                     labelv = Variable(self.label.fill_(self.real_label))
@@ -1010,13 +968,15 @@ class GAN(object):
                 else:
                     raise ValueError('Unknown GAN criterium')
 
+                # Get z from x (for ALI)
                 mu_z, logvar_z = self.netE(self.inputv)
-
                 z_real = gauss_reparametrize(mu_z, logvar_z)
 
+                # Get discriminator output for real, with require_grad thru G True
                 # input_D = torch.cat([self.inputv, self.inputv_depth], 1)
                 real_output_z = self.netD(self.inputv, self.inputv_cond, z_real)
 
+                # Backprop thru G
                 if self.opt.criterion == 'GAN':
                     errE = self.criterion(real_output_z, self.labelv)
                     errE.backward()
@@ -1025,16 +985,24 @@ class GAN(object):
                     errE.backward(self.one, retain_graph=True)
                 else:
                     raise ValueError('Unknown GAN criterium')
-                reconstruction_z = self.netG(z_real, self.inputv_cond)
 
+                # To check how G is, render some samples using z_real
+                # noise --G--> z --render--> x
+                reconstruction_z = self.netG(z_real, self.inputv_cond)
                 reconstruction_rendered, reconstructiond, loss = self.render_batch(
                     reconstruction_z, self.inputv_cond)
 
+                # Backprop thru G from reconstruction loss
                 mse_criterion = nn.MSELoss().cuda()
                 reconstruction_loss = mse_criterion(reconstruction_rendered, self.inputv)
                 reconstruction_loss.backward()
+
+                # Clip gradients
                 gnorm_G = torch.nn.utils.clip_grad_norm(
                     self.netG.parameters(), self.opt.max_gnorm)  # TODO
+
+                # Update weights of G
+                # along with some scheduling
                 if (self.opt.alt_opt_zn_interval is not None and
                     iteration >= self.opt.alt_opt_zn_start):
                     # update one of the generators
@@ -1048,7 +1016,7 @@ class GAN(object):
                 else:
                     if iteration < self.opt.lr_iter:
                         self.optG_z_lr_scheduler.step()
-
+                    # Update weights of G
                     self.optimizerG.step()
 
                 # Log print
@@ -1106,15 +1074,11 @@ class GAN(object):
                             nrow=2, normalize=True, scale_each=True)
 
                 if iteration % (2*self.opt.save_image_interval) == 0:
-
                     cam_pos=self.inputv_cond[0].repeat(self.opt.batchSize,1)
-
                     fake_z = self.netG(self.noisev, cam_pos)
                     # The normal generator is dependent on z
-
                     fake_rendered, fd, loss = self.render_batch(
                         fake_z, cam_pos)
-
                     cs = tch_var_f(contrast_stretch_percentile(
                         get_data(fd), 200, [fd.data.min(), fd.data.max()]))
                     torchvision.utils.save_image(
