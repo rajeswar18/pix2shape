@@ -25,6 +25,8 @@ class Iterator(object):
             self.cam_pos = self.cam_pos[:nb_sub]
             self.light_pos1 = self.light_pos1[:nb_sub]
 
+        print("Found", len(self.image_paths), "images!!")
+
         # Indices for returning batches, possibly shuffled order of images
         self.idx = np.arange(len(self))
 

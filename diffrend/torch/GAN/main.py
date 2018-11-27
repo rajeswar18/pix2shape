@@ -315,7 +315,7 @@ class GAN(object):
             data, data_depth, data_cond, light_pos1 = next(self.img_iter)
             self.light_pos1 = light_pos1
             data = [tch_var_f(d).permute(2, 0, 1)/255. for d in data]
-            data_depth = [tch_var_f(d_d).unsqueeze(0) for d_d in data_depth]
+            data_depth = [tch_var_f(d_d).unsqueeze(0)/255. for d_d in data_depth]
             data_cond = [tch_var_f(cond) for cond in data_cond]
 
         # Else, render using differentiable renderer
@@ -1054,9 +1054,9 @@ class GAN(object):
                           iteration, self.opt.n_iter, errD.data[0], errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0],
                           errD_fake.data[0], Wassertein_D,
                           loss.data[0], self.optG_z_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G))
-                    l2_file.write('%s,%s,%s,%s\n' % (str(iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), str(Wassertein_D)))
+                    l2_file.write('%s,%s,%s,%s\n' % (str(self.iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), str(Wassertein_D)))
                     l2_file.flush()
-                    print("written to file:", str(iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), ",", str(Wassertein_D))
+                    print("written to file:", str(self.iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), ",", str(Wassertein_D))
 
                 # Save output images
                 if iteration % (self.opt.save_image_interval) == 0 and iteration % (2*self.opt.save_image_interval) !=0:
