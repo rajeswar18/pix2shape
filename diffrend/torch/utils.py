@@ -16,8 +16,7 @@ else:
 
 print('CUDA support ', CUDA)
 
-tch_var = lambda x, fn_type, req_grad: Variable(fn_type(x),
-                                                requires_grad=req_grad)
+tch_var = lambda x, fn_type, req_grad: Variable(fn_type(x), requires_grad=req_grad)
 tch_var_f = lambda x: tch_var(x, FloatTensor, False)
 tch_var_l = lambda x: tch_var(x, LongTensor, False)
 
