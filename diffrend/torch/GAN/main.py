@@ -314,7 +314,7 @@ class GAN(object):
         if self.opt.img_iterate:
             data, data_depth, data_cond, light_pos1 = next(self.img_iter)
             self.light_pos1 = light_pos1
-            data = [tch_var_f(d).permute(2, 0, 1)/255. for d in data]
+            data = [tch_var_f(d).permute(2, 0, 1)/255.*100. for d in data]
             data_depth = [tch_var_f(d_d).unsqueeze(0)/255. for d_d in data_depth]
             data_cond = [tch_var_f(cond) for cond in data_cond]
 
@@ -422,9 +422,16 @@ class GAN(object):
                 if self.opt.render_img_nc == 1:
                     depth = res['depth']
                     im_d = depth.unsqueeze(0)
+                    min_v = torch.min(im_d)
+                    range_v = torch.max(im_d) - min_v
+                    if range_v > 0:
+                        im_d = (im_d.clone() - min) / range_v
                 else:
                     depth = res['depth']
                     im_d = depth.unsqueeze(0)
+                    range_v = torch.max(im_d) - min_v
+                    if range_v > 0:
+                        im_d = (im_d.clone() - min) / range_v
                     im = res['image'].permute(2, 0, 1)
                     target_normal_ = get_data(res['normal'])
                     target_normalmap_img_ = get_normalmap_image(target_normal_)
@@ -445,6 +452,9 @@ class GAN(object):
                 data_depth.append(im_d)
                 data_normal.append(im_n)
                 data_cond.append(large_scene['camera']['eye'])
+
+        # np.savez('data', data=data[0].data.cpu().numpy(), data_depth=data_depth[0].data.cpu().numpy(), data_cond=data_cond[0].data.cpu().numpy())
+        # sys.exit()
 
         # Stack real samples
         real_samples = torch.stack(data)
