@@ -1,15 +1,18 @@
 import datetime
 import os
 
+
 # FROM parameters_halfbox_shapenet
 class opt:
     curr_dir = os.path.dirname(os.path.realpath(__file__))
-    batch_size = 20000 # Number of views to generate
+    batch_size = 2 # Number of views to generate
+    render_reset_freq = 100 # Number of renders after which reset the scene to avoid accumulating errors
     # Image
     width=128
     height = 128
     # Object
-    new_max_dim = 2
+    plane_size = 4
+    new_max_dim = 2.5
     # Camera
     cam_dist = 8
     angle = 30 # camera angle (don't need b/c lookat!)
@@ -21,8 +24,9 @@ class opt:
     lookat = [0., 0., 0.]
     # Lights
     n_lights = 3
-    light_pos = [None, (0.6*cam_dist, 0.8*cam_dist, 0.2*cam_dist), (0.8*cam_dist, 0.6*cam_dist, 0.8*cam_dist)]
-    light_color = [(0.8, 0.8, 0.8), (0.8, 0.1, 0.1), (0.2, 0.8, 0.2)]
+    light_pos = [None, (0.4*cam_dist, 0.4*cam_dist, 0.4*cam_dist), (0.5*cam_dist, 0.5*cam_dist, 0.5*cam_dist)]
+    rn_light_pos_dist = 0.4*cam_dist
+    light_color = [(.7, .4, .4), (0.3, 0.7, 0.3), (0.6, 0.4, 0.4)]
     # Render
     splats_img_size = 128
     pixel_samples = 1
