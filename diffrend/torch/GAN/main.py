@@ -424,14 +424,14 @@ class GAN(object):
                     im_d = depth.unsqueeze(0)
                     min_v = torch.min(im_d)
                     range_v = torch.max(im_d) - min_v
-                    if range_v > 0:
+                    if range_v.data.cpu().numpy()[0] > 0:
                         im_d = (im_d.clone() - min_v) / range_v
                 else:
                     depth = res['depth']
                     im_d = depth.unsqueeze(0)
                     min_v = torch.min(im_d)
                     range_v = torch.max(im_d) - min_v
-                    if range_v > 0:
+                    if range_v.data.cpu().numpy()[0] > 0:
                         im_d = (im_d.clone() - min_v) / range_v
                     im = res['image'].permute(2, 0, 1)
                     target_normal_ = get_data(res['normal'])
