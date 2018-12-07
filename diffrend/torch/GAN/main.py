@@ -460,7 +460,7 @@ class GAN(object):
                 tch_var_f(np.array(real_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'real_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                tch_var_f(np.array(real_depths)).data,
+                tch_var_f(np.array(real_depths)).data.unsqueeze(1),
                 os.path.join(self.opt.vis_images, 'real_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         # Stack real samples
@@ -757,7 +757,7 @@ class GAN(object):
                 tch_var_f(np.array(gen_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'gen_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                tch_var_f(np.array(gen_depths)).data,
+                tch_var_f(np.array(gen_depths)).data.unsqueeze(1),
                 os.path.join(self.opt.vis_images, 'gen_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
                 tch_var_f(np.array(gen_world_normals)).data.permute(0, 3, 1, 2),
@@ -862,17 +862,17 @@ class GAN(object):
             self.img_iter = Iterator(root_dir=self.opt.root_dir, batch_size=self.opt.batchSize, shuffle=True)
 
         # Arrays
-        G_losses = []
-        D_losses = []
-        E_losses = []
-        reconstruction_losses = []
-        wass_Ds = []
-        G_grad_norms = []
-        D_grad_norms = []
-        D_xs = []
-        D_Gz_trainDs = []
-        D_Gz_trainGs = []
-        D_x_reczs = []
+        self.G_losses = []
+        self.D_losses = []
+        self.E_losses = []
+        self.reconstruction_losses = []
+        self.wass_Ds = []
+        self.G_grad_norms = []
+        self.D_grad_norms = []
+        self.D_xs = []
+        self.D_Gz_trainDs = []
+        self.D_Gz_trainGs = []
+        self.D_x_reczs = []
 
         # Start training
         start_time = time.time()
