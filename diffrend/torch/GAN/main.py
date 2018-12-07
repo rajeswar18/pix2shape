@@ -457,10 +457,10 @@ class GAN(object):
         # Make images
         if not self.opt.img_iterate and self.iteration_no % self.opt.save_image_interval == 0:
             torchvision.utils.save_image(
-                torch.stack(tch_var_f(np.array(real_normals)).data),
+                tch_var_f(np.array(real_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'real_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                torch.stack(tch_var_f(np.array(real_depths)).data),
+                tch_var_f(np.array(real_depths)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'real_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         # Stack real samples
@@ -754,13 +754,13 @@ class GAN(object):
         # Save batch of images
         if self.iteration_no % self.opt.save_image_interval == 0:
             torchvision.utils.save_image(
-                torch.stack(tch_var_f(np.array(gen_normals)).data),
+                tch_var_f(np.array(gen_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'gen_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                torch.stack(tch_var_f(np.array(gen_depths)).data),
+                tch_var_f(np.array(gen_depths)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'gen_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                torch.stack(tch_var_f(np.array(gen_world_normals)).data),
+                tch_var_f(np.array(gen_world_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'gen_world_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         rendered_data = torch.stack(rendered_data)
