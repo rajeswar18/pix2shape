@@ -15,6 +15,7 @@ import itertools
 import numpy as np
 import os
 import shutil
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -143,7 +144,7 @@ class GAN(object):
         self.fake_label = 0
 
         # Losses file
-        file_name = os.path.join(self.opt.out_dir, 'losses.txt')
+        file_name = os.path.join(self.opt.out_dir, 'render_batch_losses.txt')
         self.output_loss_file = open(file_name, "wt")
 
         # TODO: Add comment
@@ -874,8 +875,9 @@ class GAN(object):
         D_x_reczs = []
 
         # Start training
-        file_name = os.path.join(self.opt.out_dir, 'L2.txt')
-        with open(file_name, 'wt') as l2_file:
+        start_time = time.time()
+        file_name = os.path.join(self.opt.out_dir, 'log.txt')
+        with open(file_name, 'wt') as log_file:
 
             curr_generator_idx = 0
 
@@ -1083,16 +1085,19 @@ class GAN(object):
                                            gnorm_G,
                                            self.iteration_no)
 
-                    print('\n[{0:%Y/%m/%d %H:%M:%S}]'.format(datetime.datetime.now()),
+                    curr_time = time.time()
+                    curr_time_str = datetime.datetime.fromtimestamp(curr_time).strftime('%Y-%m-%d %H:%M:%S')
+                    elapsed = str(datetime.timedelta(seconds=(curr_time - start_time)))
+                    log = '\n[{}]: Elapsed [{}] '.format(curr_time_str, elapsed),
                           '[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '
                           ' Loss_D_fake: %.4f Wassertein_D: %.4f '
                           ' L2_loss: %.4f z_lr: %.8f,  Disc_grad_norm: %.8f, Gen_grad_norm: %.8f\n' % (
                           iteration, self.opt.n_iter, errD.data[0], errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0],
                           errD_fake.data[0], Wassertein_D,
-                          loss.data[0], self.optG_z_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G))
-                    l2_file.write('%s,%s,%s,%s\n' % (str(self.iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), str(Wassertein_D)))
-                    l2_file.flush()
-                    print("written to file:", str(self.iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), ",", str(Wassertein_D))
+                          loss.data[0], self.optG_z_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G)
+                    print(log)
+                    log_file.write(log)
+                    log_file.flush()
 
                     # Accumulate losses and plot
                     self.G_losses.append(errG.data[0])
