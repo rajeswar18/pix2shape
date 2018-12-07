@@ -457,10 +457,10 @@ class GAN(object):
         # Make images
         if self.iteration_no % self.opt.save_image_interval == 0:
             torchvision.utils.save_image(
-                real_normals,
+                torch.stack(real_normals),
                 os.path.join(self.opt.vis_images, 'real_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                real_depths,
+                torch.stack(real_depths),
                 os.path.join(self.opt.vis_images, 'real_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         # Stack real samples
@@ -754,13 +754,13 @@ class GAN(object):
         # Save batch of images
         if self.iteration_no % self.opt.save_image_interval == 0:
             torchvision.utils.save_image(
-                gen_normals,
+                torch.stack(gen_normals),
                 os.path.join(self.opt.vis_images, 'gen_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                gen_depths,
+                torch.stack(gen_depths),
                 os.path.join(self.opt.vis_images, 'gen_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                gen_world_normals,
+                torch.stack(gen_world_normals),
                 os.path.join(self.opt.vis_images, 'gen_world_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         rendered_data = torch.stack(rendered_data)
@@ -1088,9 +1088,9 @@ class GAN(object):
                     curr_time = time.time()
                     curr_time_str = datetime.datetime.fromtimestamp(curr_time).strftime('%Y-%m-%d %H:%M:%S')
                     elapsed = str(datetime.timedelta(seconds=(curr_time - start_time)))
-                    log = '\n[{}]: Elapsed [{}] '.format(curr_time_str, elapsed),
-                          '[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '
-                          ' Loss_D_fake: %.4f Wassertein_D: %.4f '
+                    log = '\n[{}]: Elapsed [{}] '.format(curr_time_str, elapsed) +\
+                          '[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '\
+                          ' Loss_D_fake: %.4f Wassertein_D: %.4f '\
                           ' L2_loss: %.4f z_lr: %.8f,  Disc_grad_norm: %.8f, Gen_grad_norm: %.8f\n' % (
                           iteration, self.opt.n_iter, errD.data[0], errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0],
                           errD_fake.data[0], Wassertein_D,
