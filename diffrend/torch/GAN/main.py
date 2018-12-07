@@ -460,7 +460,7 @@ class GAN(object):
                 tch_var_f(np.array(real_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'real_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                tch_var_f(np.array(real_depths)).data.permute(0, 3, 1, 2),
+                tch_var_f(np.array(real_depths)).data,
                 os.path.join(self.opt.vis_images, 'real_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         # Stack real samples
@@ -757,7 +757,7 @@ class GAN(object):
                 tch_var_f(np.array(gen_normals)).data.permute(0, 3, 1, 2),
                 os.path.join(self.opt.vis_images, 'gen_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                tch_var_f(np.array(gen_depths)).data.permute(0, 3, 1, 2),
+                tch_var_f(np.array(gen_depths)).data,
                 os.path.join(self.opt.vis_images, 'gen_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
                 tch_var_f(np.array(gen_world_normals)).data.permute(0, 3, 1, 2),
