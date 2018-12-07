@@ -321,7 +321,7 @@ class GAN(object):
         # Else, render using differentiable renderer
         else:
 
-            data, data_depth, data_normal, data_cond = [], [], [], []
+            data, data_depth, data_normal, data_cond, real_normals, real_depths = [], [], [], [], [], []
 
             # Define the camera poses
             if not self.opt.same_view:
@@ -361,7 +361,6 @@ class GAN(object):
             large_scene['camera']['at'] = tch_var_f(lookat)
 
             # Render scenes
-            inpath = self.opt.vis_images + '/'
             for idx in range(self.opt.batchSize):
                 # Save the splats into the rendering scene
                 if self.opt.use_mesh:
@@ -440,15 +439,12 @@ class GAN(object):
                         target_normalmap_img_).view(im.shape[1], im.shape[2],
                                                     3).permute(2, 0, 1)
 
-                # Add depth image to the output structure
+                # Append images
                 if self.iteration_no % self.opt.save_image_interval == 0:
-                    imsave((inpath + str(self.iteration_no) +
-                            'real_normalmap_{:05d}.png'.format(idx)),
-                           target_normalmap_img_)
-                    imsave((inpath + str(self.iteration_no) +
-                            'real_depth_{:05d}.png'.format(idx)), get_data(depth))
-                    # imsave(inpath + str(self.iteration_no) + 'real_depthmap_{:05d}.png'.format(idx), im_d)
-                    # imsave(inpath + str(self.iteration_no) + 'world_normalmap_{:05d}.png'.format(idx), target_worldnormalmap_img_)
+                    real_normals.append(target_normalmap_img_)
+                    real_depths.append(get_data(depth))
+
+                # Add depth image to the output structure
                 data.append(im)
                 data_depth.append(im_d)
                 data_normal.append(im_n)
@@ -456,6 +452,15 @@ class GAN(object):
 
         # np.savez('data', data=data[0].data.cpu().numpy(), data_depth=data_depth[0].data.cpu().numpy(), data_cond=data_cond[0].data.cpu().numpy())
         # sys.exit()
+
+        # Make images
+        if self.iteration_no % self.opt.save_image_interval == 0:
+            torchvision.utils.save_image(
+                real_normals,
+                os.path.join(self.opt.vis_images, 'real_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
+            torchvision.utils.save_image(
+                real_depths,
+                os.path.join(self.opt.vis_images, 'real_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         # Stack real samples
         real_samples = torch.stack(data)
@@ -567,10 +572,8 @@ class GAN(object):
                     phi_range=np.deg2rad(self.opt.phi))
                 # TODO: deg2grad!!
 
-        rendered_data = []
-        rendered_data_depth = []
-        rendered_data_cond = []
-        scenes = []
+        rendered_data, rendered_data_depth, rendered_data_cond, scenes = [], [], [], []
+        gen_normals, gen_depths, gen_world_normals = [], [], []
         inpath = self.opt.vis_images + '/'
         inpath_xyz = self.opt.vis_xyz + '/'
         z_min = self.scene['camera']['focal_length']
@@ -702,16 +705,12 @@ class GAN(object):
                     (H, W, 3))
                 target_worldnormalmap_img_ = get_normalmap_image(
                     target_worldnormal_)
+
             if self.iteration_no % self.opt.save_image_interval == 0:
-                imsave((inpath + str(self.iteration_no) +
-                        'normalmap_{:05d}.png'.format(idx)),
-                       target_normalmap_img_)
-                imsave((inpath + str(self.iteration_no) +
-                        'depthmap_{:05d}.png'.format(idx)),
-                       get_data(res['depth']))
-                imsave((inpath + str(self.iteration_no) +
-                        'world_normalmap_{:05d}.png'.format(idx)),
-                       target_worldnormalmap_img_)
+                gen_normals.append(target_normalmap_img_)
+                gen_depths.append(get_data(res['depth']))
+                gen_world_normals.append(target_worldnormalmap_img_)
+
             if self.iteration_no % 200 == 0:
                 im2 = get_data(res['image'])
                 depth2 = get_data(res['depth'])
@@ -744,11 +743,24 @@ class GAN(object):
                 for (gZ, gI) in zip(gradZ, gradImg):
                     loss += (self.opt.gz_gi_loss * torch.mean(torch.abs(
                                 torch.abs(gZ) - torch.abs(gI))))
+
             # Store normalized depth into the data
             rendered_data.append(im)
             rendered_data_depth.append(im_d)
             rendered_data_cond.append(self.scene['camera']['eye'])
             scenes.append(self.scene)
+
+        # Save batch of images
+        if self.iteration_no % self.opt.save_image_interval == 0:
+            torchvision.utils.save_image(
+                gen_normals,
+                os.path.join(self.opt.vis_images, 'gen_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
+            torchvision.utils.save_image(
+                gen_depths,
+                os.path.join(self.opt.vis_images, 'gen_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
+            torchvision.utils.save_image(
+                gen_world_normals,
+                os.path.join(self.opt.vis_images, 'gen_world_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         rendered_data = torch.stack(rendered_data)
         rendered_data_depth = torch.stack(rendered_data_depth)
@@ -848,6 +860,19 @@ class GAN(object):
         if self.opt.img_iterate:
             self.img_iter = Iterator(root_dir=self.opt.root_dir, batch_size=self.opt.batchSize, shuffle=True)
 
+        # Arrays
+        G_losses = []
+        D_losses = []
+        E_losses = []
+        reconstruction_losses = []
+        wass_Ds = []
+        G_grad_norms = []
+        D_grad_norms = []
+        D_xs = []
+        D_Gz_trainDs = []
+        D_Gz_trainGs = []
+        D_x_reczs = []
+
         # Start training
         file_name = os.path.join(self.opt.out_dir, 'L2.txt')
         with open(file_name, 'wt') as l2_file:
@@ -882,14 +907,14 @@ class GAN(object):
 
                     # Get discriminator output
                     # input_D = torch.cat([self.inputv, self.inputv_depth], 1)
-                    real_output = self.netD(self.inputv, self.inputv_cond.detach(), z_real.detach())
+                    outD_real = self.netD(self.inputv, self.inputv_cond.detach(), z_real.detach())
 
                     # Backprop thru D
                     if self.opt.criterion == 'GAN':
-                        errD_real = self.criterion(real_output, self.labelv)
+                        errD_real = self.criterion(outD_real, self.labelv)
                         errD_real.backward()
                     elif self.opt.criterion == 'WGAN':
-                        errD_real = real_output.mean()
+                        errD_real = outD_real.mean()
                         errD_real.backward(self.mone)
                     else:
                         raise ValueError('Unknown GAN criterium')
@@ -1069,48 +1094,106 @@ class GAN(object):
                     l2_file.flush()
                     print("written to file:", str(self.iteration_no), str(reconstruction_loss.data[0]), str(l2_loss.data[0]), ",", str(Wassertein_D))
 
+                    # Accumulate losses and plot
+                    self.G_losses.append(errG.data[0])
+                    self.D_losses.append(errD.data[0])
+                    self.E_losses.append(errE.data[0])
+                    self.reconstruction_losses.append(reconstruction_loss.data[0])
+                    self.D_xs.append(outD_real.mean().data[0])
+                    self.D_Gz_trainDs.append(outD_fake.mean().data[0])
+                    self.D_Gz_trainGs.append(outG_fake.mean().data[0])
+                    self.D_x_reczs.append(real_output_z.mean().data[0])
+                    self.G_grad_norms.append(gnorm_G)
+                    self.D_grad_norms.append(gnorm_D)
+                    self.wass_Ds.append(Wassertein_D)
+                    self.make_plots()
+
                 # Save output images
-                if iteration % (self.opt.save_image_interval) == 0 and iteration % (2*self.opt.save_image_interval) !=0:
-                    cs = tch_var_f(contrast_stretch_percentile(
-                        get_data(fd), 200, [fd.data.min(), fd.data.max()]))
-                    torchvision.utils.save_image(
-                        fake_rendered.data,
-                        os.path.join(self.opt.vis_images,
-                                     'output_%d.png' % (iteration)),
-                        nrow=2, normalize=True, scale_each=True)
+                if iteration % (self.opt.save_image_interval) == 0:
 
-                    torchvision.utils.save_image(
+                    if iteration % (2*self.opt.save_image_interval) !=0:
+                        # cs = tch_var_f(contrast_stretch_percentile(
+                        #     get_data(fd), 200, [fd.data.min(), fd.data.max()]))
+                        torchvision.utils.save_image(
+                            fake_rendered.data,
+                            os.path.join(self.opt.vis_images, 'gen_image_{:05d}.png'.format(iteration)), nrow=2, normalize=True, scale_each=True)
+                        torchvision.utils.save_image(
                             reconstruction_rendered.data,
-                            os.path.join(self.opt.vis_images,
-                                         'reconstruction_%d.png' % (iteration)),
+                            os.path.join(self.opt.vis_images, 'reconstructed_image_{:05d}.png'.format(iteration)), nrow=2, normalize=True, scale_each=True)
+                    else:
+                        cam_pos=self.inputv_cond[0].repeat(self.opt.batchSize,1)
+                        fake_z = self.netG(self.noisev, cam_pos)
+                        # The normal generator is dependent on z
+                        fake_rendered, fd, loss = self.render_batch(
+                            fake_z, cam_pos)
+                        # cs = tch_var_f(contrast_stretch_percentile(
+                        #     get_data(fd), 200, [fd.data.min(), fd.data.max()]))
+                        torchvision.utils.save_image(
+                            fake_rendered.data,
+                            os.path.join(self.opt.vis_images, 'gen_image_{:05d}.png'.format(iteration)),
                             nrow=2, normalize=True, scale_each=True)
-
-                if iteration % (2*self.opt.save_image_interval) == 0:
-                    cam_pos=self.inputv_cond[0].repeat(self.opt.batchSize,1)
-                    fake_z = self.netG(self.noisev, cam_pos)
-                    # The normal generator is dependent on z
-                    fake_rendered, fd, loss = self.render_batch(
-                        fake_z, cam_pos)
-                    cs = tch_var_f(contrast_stretch_percentile(
-                        get_data(fd), 200, [fd.data.min(), fd.data.max()]))
-                    torchvision.utils.save_image(
-                        fake_rendered.data,
-                        os.path.join(self.opt.vis_images,
-                                     'output_samecam%d.png' % (iteration)),
-                        nrow=2, normalize=True, scale_each=True)
 
                 # Save input images
                 if iteration % (self.opt.save_image_interval) == 0:
-                    cs = tch_var_f(contrast_stretch_percentile(
-                        get_data(fd), 200, [fd.data.min(), fd.data.max()]))
+                    # cs = tch_var_f(contrast_stretch_percentile(
+                    #     get_data(fd), 200, [fd.data.min(), fd.data.max()]))
                     torchvision.utils.save_image(
-                        self.inputv.data, os.path.join(
-                            self.opt.vis_images, 'input_%d.png' % (iteration)),
-                        nrow=2, normalize=True, scale_each=True)
+                        self.inputv.data,
+                        os.path.join(self.opt.vis_images, 'input_{:05d}.png'.format(iteration)), nrow=2, normalize=True, scale_each=True)
 
                 # Do checkpointing
                 if iteration % self.opt.save_interval == 0:
                     self.save_networks(iteration)
+
+    def make_plots(self):
+        iters = np.arange(len(self.G_losses))*self.opt.print_interval
+        fig = plt.figure(figsize=(25, 20))
+        # Losses
+        plt.subplot(511)
+        plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
+        plt.plot(iters, self.G_losses, alpha=0.7, label='G_loss')
+        plt.plot(iters, self.D_losses, alpha=0.7, label='D_loss')
+        plt.plot(iters, self.E_losses, alpha=0.7, label='E_loss')
+        plt.legend()
+        plt.title("Losses")
+        plt.xlabel("Iterations")
+        # Reconstruction Loss
+        plt.subplot(512)
+        plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
+        plt.plot(iters, self.reconstruction_losses, label='recon_loss')
+        plt.legend()
+        plt.title("Reconstruction Loss")
+        plt.xlabel("Iterations")
+        # D outputs
+        plt.subplot(513)
+        plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
+        plt.plot(iters, np.ones(iters.shape), 'k--', alpha=0.5)
+        plt.plot(iters, D_xs, alpha=0.7, label='D(x)')
+        plt.plot(iters, D_Gz_trainDs, alpha=0.7, label='D(G(z))_trainD')
+        plt.plot(iters, D_Gz_trainGs, alpha=0.7, label='D(G(z))_trainG')
+        plt.plot(iters, D_x_reczs, alpha=0.7, label='D(G(rec_z))')
+        plt.legend()
+        plt.title("D(x), D(G(z))")
+        plt.xlabel("Iterations")
+        # Gradient Norms
+        plt.subplot(514)
+        plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
+        plt.plot(iters, G_grad_norms, alpha=0.7, label='G_grad_norms')
+        plt.plot(iters, D_grad_norms, alpha=0.7, label='D_grad_norms')
+        plt.legend()
+        plt.title("Graident norms")
+        plt.xlabel("Iterations")
+        # Gradient Norms
+        plt.subplot(515)
+        plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
+        plt.plot(iters, wass_Ds, alpha=0.7, label='Wassertein_D')
+        plt.legend()
+        plt.title("Wassertein_D")
+        plt.xlabel("Iterations")
+        # Save
+        plt.savefig(os.path.join(opt.out_dir, opt.name, "plots.png"))
+        plt.clf()
+        plt.close()
 
     def save_networks(self, epoch):
         """Save networks to hard disk."""
