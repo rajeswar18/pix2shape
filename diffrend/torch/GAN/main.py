@@ -12,6 +12,7 @@ matplotlib.use('Agg')
 import copy
 import datetime
 import itertools
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import shutil
@@ -808,7 +809,7 @@ class GAN(object):
             res['pos'].register_hook(self.tensorboard_pos_hook)
             res['normal'].register_hook(self.tensorboard_normal_hook)
 
-            log_to_print = ('it: %d. loss: %f nloss: %f z_loss:%f [%f, %f], '
+            log_to_print = ('it: %d, loss: %f, nloss: %f, z_loss:%f, [%f, %f], '
                             'z_normal_loss: %f, spatial_var_loss: %f, '
                             'normal_away_loss: %f, nz_range: [%f, %f], '
                             'spatial_loss: %f, im_depth_cons_loss: %f' %
@@ -1089,9 +1090,9 @@ class GAN(object):
                     curr_time_str = datetime.datetime.fromtimestamp(curr_time).strftime('%Y-%m-%d %H:%M:%S')
                     elapsed = str(datetime.timedelta(seconds=(curr_time - start_time)))
                     log = '\n[{}]: Elapsed [{}] '.format(curr_time_str, elapsed) +\
-                          '[%d/%d] Loss_D: %.4f Loss_G: %.4f Loss_E: %.4f reconstruction_loss: %.4f Loss_D_real: %.4f '\
-                          ' Loss_D_fake: %.4f Wassertein_D: %.4f '\
-                          ' L2_loss: %.4f z_lr: %.8f,  Disc_grad_norm: %.8f, Gen_grad_norm: %.8f\n' % (
+                          '[%d/%d] Loss_D: %.4f, Loss_G:, %.4f, Loss_E: %.4f, reconstruction_loss: %.4f, Loss_D_real: %.4f, '\
+                          'Loss_D_fake: %.4f, Wassertein_D: %.4f, '\
+                          'L2_loss: %.4f, z_lr: %.8f, Disc_grad_norm: %.8f, Gen_grad_norm: %.8f\n' % (
                           iteration, self.opt.n_iter, errD.data[0], errG.data[0], errE.data[0], reconstruction_loss.data[0], errD_real.data[0],
                           errD_fake.data[0], Wassertein_D,
                           loss.data[0], self.optG_z_lr_scheduler.get_lr()[0], gnorm_D, gnorm_G)
@@ -1173,30 +1174,30 @@ class GAN(object):
         plt.subplot(513)
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
         plt.plot(iters, np.ones(iters.shape), 'k--', alpha=0.5)
-        plt.plot(iters, D_xs, alpha=0.7, label='D(x)')
-        plt.plot(iters, D_Gz_trainDs, alpha=0.7, label='D(G(z))_trainD')
-        plt.plot(iters, D_Gz_trainGs, alpha=0.7, label='D(G(z))_trainG')
-        plt.plot(iters, D_x_reczs, alpha=0.7, label='D(G(rec_z))')
+        plt.plot(iters, self.D_xs, alpha=0.7, label='D(x)')
+        plt.plot(iters, self.D_Gz_trainDs, alpha=0.7, label='D(G(z))_trainD')
+        plt.plot(iters, self.D_Gz_trainGs, alpha=0.7, label='D(G(z))_trainG')
+        plt.plot(iters, self.D_x_reczs, alpha=0.7, label='D(G(rec_z))')
         plt.legend()
         plt.title("D(x), D(G(z))")
         plt.xlabel("Iterations")
         # Gradient Norms
         plt.subplot(514)
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
-        plt.plot(iters, G_grad_norms, alpha=0.7, label='G_grad_norms')
-        plt.plot(iters, D_grad_norms, alpha=0.7, label='D_grad_norms')
+        plt.plot(iters, self.G_grad_norms, alpha=0.7, label='G_grad_norms')
+        plt.plot(iters, self.D_grad_norms, alpha=0.7, label='D_grad_norms')
         plt.legend()
         plt.title("Graident norms")
         plt.xlabel("Iterations")
         # Gradient Norms
         plt.subplot(515)
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
-        plt.plot(iters, wass_Ds, alpha=0.7, label='Wassertein_D')
+        plt.plot(iters, self.wass_Ds, alpha=0.7, label='Wassertein_D')
         plt.legend()
         plt.title("Wassertein_D")
         plt.xlabel("Iterations")
         # Save
-        plt.savefig(os.path.join(opt.out_dir, opt.name, "plots.png"))
+        plt.savefig(os.path.join(self.opt.out_dir, "plots.png"))
         plt.clf()
         plt.close()
 
