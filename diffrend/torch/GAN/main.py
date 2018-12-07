@@ -455,12 +455,12 @@ class GAN(object):
         # sys.exit()
 
         # Make images
-        if self.iteration_no % self.opt.save_image_interval == 0:
+        if not self.opt.img_iterate and if self.iteration_no % self.opt.save_image_interval == 0:
             torchvision.utils.save_image(
-                torch.stack(real_normals),
+                torch.stack(tch_var_f(np.array(real_normals))),
                 os.path.join(self.opt.vis_images, 'real_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                torch.stack(real_depths),
+                torch.stack(tch_var_f(np.array(real_depths))),
                 os.path.join(self.opt.vis_images, 'real_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         # Stack real samples
@@ -754,13 +754,13 @@ class GAN(object):
         # Save batch of images
         if self.iteration_no % self.opt.save_image_interval == 0:
             torchvision.utils.save_image(
-                torch.stack(gen_normals),
+                torch.stack(tch_var_f(np.array(gen_normals))),
                 os.path.join(self.opt.vis_images, 'gen_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                torch.stack(gen_depths),
+                torch.stack(tch_var_f(np.array(gen_depths))),
                 os.path.join(self.opt.vis_images, 'gen_depths_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
             torchvision.utils.save_image(
-                torch.stack(gen_world_normals),
+                torch.stack(tch_var_f(np.array(gen_world_normals))),
                 os.path.join(self.opt.vis_images, 'gen_world_normals_{:05d}.png'.format(self.iteration_no)), nrow=2, normalize=True, scale_each=True)
 
         rendered_data = torch.stack(rendered_data)
