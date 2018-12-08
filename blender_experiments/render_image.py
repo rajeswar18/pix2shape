@@ -110,7 +110,8 @@ for i in range(0, opt.batch_size, opt.render_reset_freq):
         for l in range(opt.n_lights):
             # Position
             if opt.light_pos[l] is None:
-                light_pos_l.append(tuple(np.random.rand(3)*opt.rn_light_pos_dist + light_eps))
+                # light_pos_l.append(tuple(np.random.rand(3)*opt.rn_light_pos_dist + light_eps))
+                light_pos_l.append(uniform_sample_sphere(radius=opt.rn_light_pos_dist, num_samples=1, theta_range=np.deg2rad(opt.theta_range), phi_range=np.deg2rad(opt.phi_range))[0])
             else:
                 light_pos_l.append(opt.light_pos[l])
             # Color
@@ -127,7 +128,7 @@ for i in range(0, opt.batch_size, opt.render_reset_freq):
     for l in range(opt.n_lights):
         bpy.ops.object.lamp_add(type='POINT', location=light_pos[i][l])
         bpy.context.object.data.color = light_color[i][l]
-        bpy.context.object.data.distance = 15
+        bpy.context.object.data.distance = opt.light_attn_dist
         bpy.context.object.data.use_specular = False
         lights.append(bpy.context.selected_objects[0])
         # bpy.ops.object.lamp_add(type='AREA', radius=0.5, location=(0, 0, 10))

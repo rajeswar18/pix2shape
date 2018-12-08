@@ -14,7 +14,9 @@ class opt:
     plane_size = 4
     new_max_dim = 2.5
     # Camera
-    cam_dist = 8
+    def_cam_dist = 3.
+    cam_dist = 8.
+    r2b_ratio = cam_dist/def_cam_dist
     angle = 30 # camera angle (don't need b/c lookat!)
     fovy = 26 # Field of view in the vertical direction.
     focal_length = 0.1
@@ -24,9 +26,10 @@ class opt:
     lookat = [0., 0., 0.]
     # Lights
     n_lights = 3
-    light_pos = [None, (0.4*cam_dist, 0.4*cam_dist, 0.4*cam_dist), (0.5*cam_dist, 0.5*cam_dist, 0.5*cam_dist)]
-    rn_light_pos_dist = 0.4*cam_dist
-    light_color = [(.7, .4, .4), (0.3, 0.7, 0.3), (0.6, 0.4, 0.4)]
+    light_pos = [None, (0.2*r2b_ratio, 0.6*r2b_ratio, 0.8*r2b_ratio), (0.8*r2b_ratio, 0.8*r2b_ratio, 0.6*r2b_ratio)]
+    rn_light_pos_dist = cam_dist
+    light_color = [(0.8, 0.8, 0.8), (0.8, 0.1, 0.1), (0.2, 0.8, 0.2)]
+    light_attn_dist = 14.142
     # Render
     splats_img_size = 128
     pixel_samples = 1
