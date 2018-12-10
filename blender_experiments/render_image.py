@@ -69,7 +69,7 @@ for i in range(0, opt.batch_size, opt.render_reset_freq):
     # Translate obj to origin
     bpy.ops.transform.translate(value=-obj_center)
 
-    # Flip it wrt X
+    # Flip it wrt Y
     # bpy.ops.transform.rotate(value=np.pi, axis=(1, 0, 0))
     rotate_object(obj, np.pi, (0, 1, 0), (0, 0, 0))
 
@@ -80,7 +80,7 @@ for i in range(0, opt.batch_size, opt.render_reset_freq):
     # Resize obj with a scale
     bpy.ops.transform.resize(value=(opt.new_max_dim/max_dim, opt.new_max_dim/max_dim, opt.new_max_dim/max_dim))
     # Recenter it
-    bpy.ops.transform.translate(value=-find_center(obj))
+    # bpy.ops.transform.translate(value=-find_center(obj))
 
     # Rotate obj randomly about its vertical axis
     rot_angles = np.random.uniform(size=opt.batch_size)*2*np.pi
@@ -90,7 +90,7 @@ for i in range(0, opt.batch_size, opt.render_reset_freq):
     rotate_object(obj, rot_angles[i], (0, 0, 1), find_center(obj))
 
     # Translate obj to awesome location
-    bpy.ops.transform.translate(value=(opt.new_max_dim/2, opt.new_max_dim/2, opt.new_max_dim/2))
+    bpy.ops.transform.translate(value=(opt.new_max_dim/2, opt.new_max_dim/2, 0.4))
 
     # Don't do bpy.context.selected_objects[0].location = (opt.new_max_dim/2, opt.new_max_dim/2, opt.new_max_dim/2)
     # since obj.location could be different from find_center(obj)

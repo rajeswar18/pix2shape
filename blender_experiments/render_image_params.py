@@ -1,4 +1,5 @@
 import datetime
+import numpy as np
 import os
 
 
@@ -10,13 +11,11 @@ class opt:
     # Image
     width=128
     height = 128
-    # Object
-    plane_size = 4
-    new_max_dim = 2.5
     # Camera
-    def_cam_dist = 3.
+    def_cam_dist = 0.8
     cam_dist = 8.
-    r2b_ratio = cam_dist/def_cam_dist
+    new_dist_r = cam_dist*.6
+    new_dist_g = cam_dist*.7
     angle = 30 # camera angle (don't need b/c lookat!)
     fovy = 26 # Field of view in the vertical direction.
     focal_length = 0.1
@@ -24,12 +23,15 @@ class opt:
     phi_range = [20, 70]
     axis = [0., 1., 0.]
     lookat = [0., 0., 0.]
+    # Object
+    plane_size = 4
+    new_max_dim = cam_dist/5
     # Lights
     n_lights = 3
-    light_pos = [None, (0.2*r2b_ratio, 0.6*r2b_ratio, 0.8*r2b_ratio), (0.8*r2b_ratio, 0.8*r2b_ratio, 0.6*r2b_ratio)]
-    rn_light_pos_dist = cam_dist
+    light_pos = [None, (0.2*new_dist_r, 0.6*new_dist_r, 0.8*new_dist_r), (0.8*new_dist_g, 0.8*new_dist_g, 0.6*new_dist_g)]
+    rn_light_pos_dist = cam_dist*.7
     light_color = [(0.8, 0.8, 0.8), (0.8, 0.1, 0.1), (0.2, 0.8, 0.2)]
-    light_attn_dist = 14.142
+    light_attn_dist = cam_dist*1.6
     # Render
     splats_img_size = 128
     pixel_samples = 1
