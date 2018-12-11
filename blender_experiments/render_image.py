@@ -90,7 +90,7 @@ for i in range(0, opt.batch_size, opt.render_reset_freq):
     rotate_object(obj, rot_angles[i], (0, 0, 1), find_center(obj))
 
     # Translate obj to awesome location
-    bpy.ops.transform.translate(value=(opt.new_max_dim/2, opt.new_max_dim/2, 0.4))
+    bpy.ops.transform.translate(value=opt.obj_location)
 
     # Don't do bpy.context.selected_objects[0].location = (opt.new_max_dim/2, opt.new_max_dim/2, opt.new_max_dim/2)
     # since obj.location could be different from find_center(obj)
