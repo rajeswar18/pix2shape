@@ -6,7 +6,7 @@ import os
 # FROM parameters_halfbox_shapenet
 class opt:
     curr_dir = os.path.dirname(os.path.realpath(__file__))
-    batch_size = 1000 # Number of views to generate
+    batch_size = 2 # Number of views to generate
     render_reset_freq = 100 # Number of renders after which reset the scene to avoid accumulating errors
     # Image
     width=128
