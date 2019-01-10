@@ -1,0 +1,17 @@
+-f /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2
+-f /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+cycler==0.10.0
+-e git+https://github.com/rajeswar18/pix2scene.git@1ea39d4663c99a966d123f97720a00a0052cc0d6#egg=diffrend
+imageio==2.4.1
+kiwisolver==1.0.1
+matplotlib==3.0.2
+numpy==1.15.2
+Pillow==5.4.1
+protobuf==3.6.1
+pyparsing==2.3.0
+python-dateutil==2.7.5
+PyYAML==4.1
+six==1.12.0
+tensorboardX==1.5
+torch==0.3.1
+torchvision==0.2.1
