@@ -144,7 +144,7 @@ class Parameters():
         self.parser.add_argument('--clamp', type=float, default=0.01, help='clamp the weights for WGAN')
 
         # Other parameters
-        self.parser.add_argument('--no_cuda', action='store_true', default=False, help='enables cuda')
+        self.parser.add_argument('--no_cuda', action='store_true', default=False, help='disables cuda')
         self.parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use')
         self.parser.add_argument('--manualSeed', type=int, help='manual seed')
         self.parser.add_argument('--out_dir', type=str, default=default_out)

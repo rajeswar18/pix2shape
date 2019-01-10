@@ -104,12 +104,13 @@ def gauss_reparametrize(mu, logvar, n_sample=1):
 
 
 def calc_gradient_penalty(discriminator, encoder, real_data, fake_data, fake_data_cond, z, z_enc,
-                          gp_lambda):
+                          gp_lambda, no_cuda):
     """Calculate GP."""
     assert real_data.size(0) == fake_data.size(0)
     alpha = torch.rand(real_data.size(0), 1, 1, 1)
     alpha = alpha.expand(real_data.size())
-    alpha = alpha.cuda()
+    if not no_cuda:
+        alpha = alpha.cuda()
 
     interpolates = Variable(alpha * real_data + ((1 - alpha) * fake_data),
                             requires_grad=True)
@@ -117,13 +118,18 @@ def calc_gradient_penalty(discriminator, encoder, real_data, fake_data, fake_dat
 
     interpolate_z = gauss_reparametrize(interpolate_mu_z, interpolate_logvar_z)
 
-
     interpolates_cond = Variable(fake_data_cond, requires_grad=True)
     disc_interpolates = discriminator(interpolates, interpolates_cond, interpolate_z.detach())
-    gradients = torch.autograd.grad(
-        outputs=disc_interpolates, inputs=interpolates,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True, retain_graph=True, only_inputs=True)[0]
+    if not no_cuda:
+        gradients = torch.autograd.grad(
+            outputs=disc_interpolates, inputs=interpolates,
+            grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+            create_graph=True, retain_graph=True, only_inputs=True)[0]
+    else:
+        gradients = torch.autograd.grad(
+            outputs=disc_interpolates, inputs=interpolates,
+            grad_outputs=torch.ones(disc_interpolates.size()),
+            create_graph=True, retain_graph=True, only_inputs=True)[0]
     gradients = gradients.contiguous().view(gradients.size(0), -1)
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * gp_lambda
 
@@ -338,7 +344,7 @@ class GAN(object):
                         axis=None, angle=self.opt.angle,
                         theta_range=np.deg2rad(self.opt.theta),
                         phi_range=np.deg2rad(self.opt.phi))
-            if  self.opt.full_sphere_sampling_light:
+            if self.opt.full_sphere_sampling_light:
                 self.light_pos1 = uniform_sample_sphere(
                     radius=self.opt.cam_dist, num_samples=self.opt.batchSize,
                     axis=None, angle=self.opt.angle,
@@ -379,11 +385,18 @@ class GAN(object):
                     large_scene['objects']['triangle']['material_idx'] = tch_var_l(
                         np.zeros(samples['mesh']['face'][0].shape[0],
                                  dtype=int).tolist())
-                    large_scene['objects']['triangle']['face'] = Variable(
-                        samples['mesh']['face'][0].cuda(), requires_grad=False)
-                    large_scene['objects']['triangle']['normal'] = Variable(
-                        samples['mesh']['normal'][0].cuda(),
-                        requires_grad=False)
+                    if not self.opt.no_cuda:
+                        large_scene['objects']['triangle']['face'] = Variable(
+                            samples['mesh']['face'][0].cuda(), requires_grad=False)
+                        large_scene['objects']['triangle']['normal'] = Variable(
+                            samples['mesh']['normal'][0].cuda(),
+                            requires_grad=False)
+                    else:
+                        large_scene['objects']['triangle']['face'] = Variable(
+                            samples['mesh']['face'][0], requires_grad=False)
+                        large_scene['objects']['triangle']['normal'] = Variable(
+                            samples['mesh']['normal'][0],
+                            requires_grad=False)
                 else:
                     if 'sphere' in large_scene['objects']:
                         del large_scene['objects']['sphere']
@@ -398,11 +411,19 @@ class GAN(object):
                         np.ones(self.opt.n_splats) * self.opt.splats_radius)
                     large_scene['objects']['disk']['material_idx'] = tch_var_l(
                         np.zeros(self.opt.n_splats, dtype=int).tolist())
-                    large_scene['objects']['disk']['pos'] = Variable(
-                        samples['splats']['pos'][idx].cuda(),
+                    if not self.opt.no_cuda:
+                        large_scene['objects']['disk']['pos'] = Variable(
+                            samples['splats']['pos'][idx].cuda(),
+                            requires_grad=False)
+                        large_scene['objects']['disk']['normal'] = Variable(
+                            samples['splats']['normal'][idx].cuda(),
                         requires_grad=False)
-                    large_scene['objects']['disk']['normal'] = Variable(
-                        samples['splats']['normal'][idx].cuda(),
+                    else:
+                        large_scene['objects']['disk']['pos'] = Variable(
+                            samples['splats']['pos'][idx],
+                            requires_grad=False)
+                        large_scene['objects']['disk']['normal'] = Variable(
+                            samples['splats']['normal'][idx],
                         requires_grad=False)
 
                 # Set camera position
@@ -432,7 +453,9 @@ class GAN(object):
                     im_d = depth.unsqueeze(0)
                     min_v = torch.min(im_d)
                     range_v = torch.max(im_d) - min_v
-                    if range_v.data.cpu().numpy()[0] > 0:
+                    # if range_v.data.cpu().numpy()[0] > 0:
+                    #     im_d = (im_d.clone() - min_v) / range_v
+                    if range_v.data.cpu().numpy() > 0:
                         im_d = (im_d.clone() - min_v) / range_v
                     im = res['image'].permute(2, 0, 1)
                     target_normal_ = get_data(res['normal'])
@@ -451,6 +474,11 @@ class GAN(object):
                 data_depth.append(im_d)
                 data_normal.append(im_n)
                 data_cond.append(large_scene['camera']['eye'])
+
+        import pdb; pdb.set_trace()
+
+        np.save('/home/user1/sample_data.npy', [d.numpy() for d in data])
+        np.save('/home/user1/sample_data_cond.npy', data_cond)
 
         # np.savez('data', data=data[0].data.cpu().numpy(), data_depth=data_depth[0].data.cpu().numpy(), data_cond=data_cond[0].data.cpu().numpy())
         # sys.exit()
@@ -955,7 +983,7 @@ class GAN(object):
                     if self.opt.gp != 'None':
                         gradient_penalty = calc_gradient_penalty(
                             self.netD, self.netE, self.inputv.data, fake_rendered.data,
-                            self.inputv_cond.data, self.noisev.data, z_real.data, self.opt.gp_lambda)
+                            self.inputv_cond.data, self.noisev.data, z_real.data, self.opt.gp_lambda, self.opt.no_cuda)
                         gradient_penalty.backward()
                         errD += gradient_penalty
 
@@ -1033,7 +1061,10 @@ class GAN(object):
                     reconstruction_z, self.inputv_cond)
 
                 # Backprop thru G from reconstruction loss
-                mse_criterion = nn.MSELoss().cuda()
+                if not self.opt.no_cuda:
+                    mse_criterion = nn.MSELoss().cuda()
+                else:
+                    mse_criterion = nn.MSELoss()
                 reconstruction_loss = mse_criterion(reconstruction_rendered, self.inputv)
                 reconstruction_loss.backward()
 
