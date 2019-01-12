@@ -53,6 +53,12 @@ from diffrend.utils.utils import contrast_stretch_percentile, save_xyz
  real_data -> discriminator
 """
 
+def mem_check():
+    import os
+    import psutil
+    process = psutil.Process(os.getpid())
+    print("Mem:", process.memory_info().rss/1024/1024/1024, "GB")
+
 
 def copy_scripts_to_folder(expr_dir):
     """Copy scripts."""
@@ -324,7 +330,7 @@ class GAN(object):
             self.light_pos1 = light_pos1
             data = [tch_var_f(d).permute(2, 0, 1)/255.*100. for d in data]
             data_depth = [tch_var_f(d_d).unsqueeze(0)/255. for d_d in data_depth]
-            data_cond = [tch_var_f(cond) for cond in data_cond]
+            data_cond = [tch_var_f(cond/8) for cond in data_cond]
 
         # Else, render using differentiable renderer
         else:
@@ -475,10 +481,7 @@ class GAN(object):
                 data_normal.append(im_n)
                 data_cond.append(large_scene['camera']['eye'])
 
-        import pdb; pdb.set_trace()
-
-        np.save('/home/user1/sample_data.npy', [d.numpy() for d in data])
-        np.save('/home/user1/sample_data_cond.npy', data_cond)
+        # import pdb; pdb.set_trace()
 
         # np.savez('data', data=data[0].data.cpu().numpy(), data_depth=data_depth[0].data.cpu().numpy(), data_cond=data_cond[0].data.cpu().numpy())
         # sys.exit()
@@ -1130,6 +1133,7 @@ class GAN(object):
                     print(log)
                     log_file.write(log)
                     log_file.flush()
+                    mem_check()
 
                     # Accumulate losses and plot
                     self.G_losses.append(errG.data[0])
