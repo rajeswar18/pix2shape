@@ -1199,7 +1199,7 @@ class GAN(object):
         plt.plot(iters, self.D_losses, alpha=0.7, label='D_loss')
         plt.plot(iters, self.E_losses, alpha=0.7, label='E_loss')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Losses")
         plt.xlabel("Iterations")
         # Reconstruction Loss
@@ -1207,7 +1207,7 @@ class GAN(object):
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
         plt.plot(iters, self.reconstruction_losses, label='recon_loss')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Reconstruction Loss")
         plt.xlabel("Iterations")
         # D outputs
@@ -1219,7 +1219,7 @@ class GAN(object):
         plt.plot(iters, self.D_Gz_trainGs, alpha=0.7, label='D(G(z))_trainG')
         plt.plot(iters, self.D_x_reczs, alpha=0.7, label='D(G(rec_z))')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("D(x), D(G(z))")
         plt.xlabel("Iterations")
         # Gradient Norms
@@ -1228,7 +1228,7 @@ class GAN(object):
         plt.plot(iters, self.G_grad_norms, alpha=0.7, label='G_grad_norms')
         plt.plot(iters, self.D_grad_norms, alpha=0.7, label='D_grad_norms')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Graident norms")
         plt.xlabel("Iterations")
         # Gradient Norms
@@ -1236,7 +1236,7 @@ class GAN(object):
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
         plt.plot(iters, self.wass_Ds, alpha=0.7, label='Wassertein_D')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Wassertein_D")
         plt.xlabel("Iterations")
         # Save
