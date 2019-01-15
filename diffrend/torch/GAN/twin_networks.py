@@ -404,6 +404,7 @@ class DCGAN_G2(nn.Module):
             output_2 = self.main_2(x)
         return output_2
 
+
 class DCGAN_G(nn.Module):
     """DCGAN generator."""
 
@@ -667,20 +668,19 @@ class _netD(nn.Module):
             nn.LeakyReLU()
             )
             # state size. (ndf*8) x 4 x 4
-        self.main2 = nn.Sequential(nn.Conv2d(ndf * 12+nz, 1, 1, 1, 0, bias=True)
-
-
-
-
-
-        )
+        self.main2 = nn.Sequential(nn.Conv2d(ndf * 12+nz, 1, 1, 1, 0, bias=True))
 
     def forward(self, x, z, z2):
         # import ipdb; ipdb.set_trace()
         z = z.view(z.size(0), z.size(1), 1, 1)
-        propogated = Variable(torch.ones((x.size(0), z.size(1),
-                                          x.size(2), x.size(3))),
-                              requires_grad=False).cuda() * z
+        if self.ngpu > 0:
+            propogated = Variable(torch.ones((x.size(0), z.size(1),
+                                              x.size(2), x.size(3))),
+                                  requires_grad=False).cuda() * z
+        else:
+            propogated = Variable(torch.ones((x.size(0), z.size(1),
+                                              x.size(2), x.size(3))),
+                                  requires_grad=False) * z
         x = torch.cat([x, propogated], 1)
         x = self.main(x)
         x2 = torch.cat([x, z2], 1)
@@ -770,6 +770,8 @@ class LatentEncoder(nn.Module):
         mu = self.enc_mu(conv_out)
         logvar = self.enc_logvar(conv_out)
         return (mu.view(mu.size(0), -1), logvar.view(logvar.size(0), -1))
+
+
 class _netD_256(nn.Module):
     def __init__(self, ngpu, nc, ndf, isize, nz,use_sigmoid=0):
         super(_netD_256, self).__init__()
@@ -819,7 +821,10 @@ class _netD_256(nn.Module):
     def forward(self, x,z):
         #import ipdb; ipdb.set_trace()
         z=z.view(z.size(0),z.size(1),1,1)
-        propogated = Variable(torch.ones((x.size(0), z.size(1), x.size(2), x.size(3))), requires_grad=False).cuda()* z
+        if self.ngpu > 0:
+            propogated = Variable(torch.ones((x.size(0), z.size(1), x.size(2), x.size(3))), requires_grad=False).cuda()*z
+        else:
+            propogated = Variable(torch.ones((x.size(0), z.size(1), x.size(2), x.size(3))), requires_grad=False)*z
         x=torch.cat([x,propogated],1)
         x = self.main(x)
         x = x.view(-1, 1).squeeze(1)
@@ -872,6 +877,8 @@ class _netD2(nn.Module):
             return F.sigmoid(x)
         else:
             return x
+
+
 class _netD_64(nn.Module):
     def __init__(self, ngpu, nc, ndf, isize, use_sigmoid=0):
         super(_netD_64, self).__init__()
@@ -962,9 +969,12 @@ class DCGAN_D(nn.Module):
 
     def forward(self, input):
         """Forward method."""
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input,
-                                               range(self.ngpu))
+        if self.ngpu > 0:
+            if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+                output = nn.parallel.data_parallel(self.main, input,
+                                                   range(self.ngpu))
+            else:
+                output = self.main(input)
         else:
             output = self.main(input)
 

@@ -73,10 +73,11 @@ class Parameters():
         self.parser.add_argument('--rotate_foreground', action='store_true', default=False, help='Use toy example')
         self.parser.add_argument('--use_penality', action='store_true', default=True, help='Use toy example')
         self.parser.add_argument('--use_mesh', action='store_true', default=True, help='Render dataset with meshes')
-        self.parser.add_argument('--gen_model_path', type=str, default=None, help='dataset root directory')
-        self.parser.add_argument('--gen_model_path2', type=str, default=None, help='dataset root directory')
-        self.parser.add_argument('--dis_model_path', type=str, default=None, help='dataset root directory')
-        self.parser.add_argument('--dis_model_path2', type=str, default=None, help='dataset root directory')
+        self.parser.add_argument('--gen_model_path', type=str, default=None, help='.pth file to load pre-trained generator')
+        self.parser.add_argument('--gen_model_path2', type=str, default=None, help='.pth file to load pre-trained generator2')
+        self.parser.add_argument('--dis_model_path', type=str, default=None, help='.pth file to load pre-trained discriminator')
+        self.parser.add_argument('--dis_model_path2', type=str, default=None, help='.pth file to load pre-trained discriminator2')
+        self.parser.add_argument('--enc_model_path', type=str, default=None, help='.pth file to load pre-trained encoder')
         self.parser.add_argument('--bg_model', type=str, default='../../../data/halfbox.obj', help='Background model path')
         self.parser.add_argument('--gz_gi_loss', type=float, default=0.0,help='grad z and grad img consistency.')
         self.parser.add_argument('--pixel_samples', type=int, default=1, help="Samples per pixel.")
@@ -180,7 +181,7 @@ class Parameters():
         self.parser.add_argument('--same_view', action='store_true', help='data with view fixed') # before we add conditioning on cam pose, this is necessary
         self.parser.add_argument('--print_interval', type=int, default=10, help='Print loss interval.')
         self.parser.add_argument('--save_image_interval', type=int, default=100, help='Save image interval.')
-        self.parser.add_argument('--save_interval', type=int, default=5000, help='Save state interval.')
+        self.parser.add_argument('--save_interval', type=int, default=1000, help='Save state interval.')
 
     def parse(self):
         """Parse."""
@@ -220,5 +221,11 @@ class Parameters():
         if torch.cuda.is_available() and self.opt.no_cuda:
             print("WARNING: You have a CUDA device, so you should "
                   "probably run with --cuda")
+
+        print("Is NO_CUDA on?", self.opt.no_cuda)
+
+        # Set ngpu to 0 if no cuda
+        if self.opt.no_cuda:
+            self.opt.ngpu = 0
 
         return self.opt

@@ -209,8 +209,8 @@ class GAN(object):
 
     def create_networks(self, ):
         """Create networks."""
-        self.netG, _, self.netD, self.netD2, self.netE = create_networks(
-            self.opt, verbose=True, depth_only=True)  # TODO: Remove D2 and G2
+        self.netG, _, self.netD, _, self.netE = create_networks(
+            self.opt, verbose=True, depth_only=True)
         # Create the normal estimation network which takes pointclouds in the
         # camera space and outputs the normals
 
@@ -877,17 +877,34 @@ class GAN(object):
         if self.opt.gen_model_path is not None:
             print("Reloading networks from")
             print(' > Generator', self.opt.gen_model_path)
-            self.netG.load_state_dict(
-                torch.load(open(self.opt.gen_model_path, 'rb')))
-            print(' > Generator2', self.opt.gen_model_path2)
-            self.netG2.load_state_dict(
-                torch.load(open(self.opt.gen_model_path2, 'rb')))
+            if not self.opt.no_cuda:
+                self.netG.load_state_dict(
+                    torch.load(open(self.opt.gen_model_path, 'rb')))
+            else:
+                self.netG.load_state_dict(
+                    torch.load(open(self.opt.gen_model_path, 'rb'), map_location='cpu'))
+            # print(' > Generator2', self.opt.gen_model_path2)
+            # self.netG2.load_state_dict(
+            #     torch.load(open(self.opt.gen_model_path2, 'rb')))
+        if self.opt.dis_model_path is not None:
             print(' > Discriminator', self.opt.dis_model_path)
-            self.netD.load_state_dict(
-                torch.load(open(self.opt.dis_model_path, 'rb')))
-            print(' > Discriminator2', self.opt.dis_model_path2)
-            self.netD2.load_state_dict(
-                torch.load(open(self.opt.dis_model_path2, 'rb')))
+            if not self.opt.no_cuda:
+                self.netD.load_state_dict(
+                    torch.load(open(self.opt.dis_model_path, 'rb')))
+            else:
+                self.netD.load_state_dict(
+                    torch.load(open(self.opt.dis_model_path, 'rb'), map_location='cpu'))
+            # print(' > Discriminator2', self.opt.dis_model_path2)
+            # self.netD2.load_state_dict(
+            #     torch.load(open(self.opt.dis_model_path2, 'rb')))
+        if self.opt.enc_model_path is not None:
+            print(' > Encoder', self.opt.dis_model_path)
+            if not self.opt.no_cuda:
+                self.netE.load_state_dict(
+                    torch.load(open(self.opt.enc_model_path, 'rb')))
+            else:
+                self.netE.load_state_dict(
+                    torch.load(open(self.opt.enc_model_path, 'rb'), map_location='cpu'))
 
         # Load image & cam_pos iterator if required
         if self.opt.img_iterate:
@@ -926,6 +943,7 @@ class GAN(object):
 
                     self.in_critic = 1
                     self.netD.zero_grad()
+
 
                     # Train D with real
                     #################
@@ -1196,7 +1214,7 @@ class GAN(object):
         plt.plot(iters, self.D_losses, alpha=0.7, label='D_loss')
         plt.plot(iters, self.E_losses, alpha=0.7, label='E_loss')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Losses")
         plt.xlabel("Iterations")
         # Reconstruction Loss
@@ -1204,7 +1222,7 @@ class GAN(object):
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
         plt.plot(iters, self.reconstruction_losses, label='recon_loss')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Reconstruction Loss")
         plt.xlabel("Iterations")
         # D outputs
@@ -1216,7 +1234,7 @@ class GAN(object):
         plt.plot(iters, self.D_Gz_trainGs, alpha=0.7, label='D(G(z))_trainG')
         plt.plot(iters, self.D_x_reczs, alpha=0.7, label='D(G(rec_z))')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("D(x), D(G(z))")
         plt.xlabel("Iterations")
         # Gradient Norms
@@ -1225,7 +1243,7 @@ class GAN(object):
         plt.plot(iters, self.G_grad_norms, alpha=0.7, label='G_grad_norms')
         plt.plot(iters, self.D_grad_norms, alpha=0.7, label='D_grad_norms')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Graident norms")
         plt.xlabel("Iterations")
         # Gradient Norms
@@ -1233,7 +1251,7 @@ class GAN(object):
         plt.plot(iters, np.zeros(iters.shape), 'k--', alpha=0.5)
         plt.plot(iters, self.wass_Ds, alpha=0.7, label='Wassertein_D')
         plt.legend()
-        plt.yscale("log")
+        plt.yscale("symlog")
         plt.title("Wassertein_D")
         plt.xlabel("Iterations")
         # Save
@@ -1244,13 +1262,15 @@ class GAN(object):
     def save_networks(self, epoch):
         """Save networks to hard disk."""
         torch.save(self.netG.state_dict(),
-                   '%s/netG_epoch_%d.pth' % (self.opt.out_dir, epoch))
+                   '%s/weights/netG_epoch_%07d.pth' % (self.opt.out_dir, epoch))
+        # torch.save(self.netG2.state_dict(),
+        #            '%s/weights/netG2_epoch_%d.pth' % (self.opt.out_dir, epoch))
         torch.save(self.netD.state_dict(),
-                   '%s/netD_epoch_%d.pth' % (self.opt.out_dir, epoch))
+                   '%s/weights/netD_epoch_%07d.pth' % (self.opt.out_dir, epoch))
+        # torch.save(self.netD2.state_dict(),
+        #            '%s/weights/netD2_epoch_%d.pth' % (self.opt.out_dir, epoch))
         torch.save(self.netE.state_dict(),
-                   '%s/netE_epoch_%d.pth' % (self.opt.out_dir, epoch))
-        torch.save(self.netD2.state_dict(),
-                   '%s/netD2_epoch_%d.pth' % (self.opt.out_dir, epoch))
+                   '%s/weights/netE_epoch_%07d.pth' % (self.opt.out_dir, epoch))
 
     def save_images(self, epoch, input, output):
         """Save images."""
@@ -1270,13 +1290,14 @@ def main():
     """Start training."""
     # Parse args
     opt = Parameters().parse()
+    print("ngpu", opt.ngpu)
 
     opt.name = "{0:%Y%m%d_%H%M%S}_{1}_{2}".format(datetime.datetime.now(), opt.name, os.path.basename(opt.root_dir.rstrip('/')))
 
     # Create experiment output folder
     exp_dir = os.path.join(opt.out_dir, opt.name)
     mkdirs(exp_dir)
-    sub_dirs=['vis_images','vis_xyz','vis_monitoring']
+    sub_dirs=['weights', 'vis_images','vis_xyz','vis_monitoring']
     for sub_dir in sub_dirs:
         dir_path = os.path.join(exp_dir, sub_dir)
         if not os.path.exists(dir_path):
