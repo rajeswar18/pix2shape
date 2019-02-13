@@ -30,14 +30,18 @@ def create_networks(opt, verbose=True, **params):
     splats_img_size = int(opt.splats_img_size)
     n_splats = int(opt.n_splats)
     render_img_size = int(opt.width)
-    if opt.fix_splat_pos:
-        splats_n_dims = 1
+
+    if opt.no_renderer:
+        splats_n_dims = 3 # RGB channels
     else:
-        splats_n_dims = 3
-    if opt.norm_sph_coord:
-        splats_n_dims += 2
-    else:
-        splats_n_dims += 3
+        if opt.fix_splat_pos:
+            splats_n_dims = 1
+        else:
+            splats_n_dims = 3
+        if opt.norm_sph_coord:
+            splats_n_dims += 2
+        else:
+            splats_n_dims += 3
 
     # Create generator network
     if opt.gen_type == 'mlp':
@@ -463,7 +467,7 @@ class DCGAN_G(nn.Module):
                             nn.LeakyReLU())
 
         main_2.add_module('final_{0}-{1}_convt'.format(cngf, nc),
-                        nn.ConvTranspose2d(cngf, 1, 4, 2, 1, bias=True))
+                        nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=True))
         if use_tanh:
             main_2.add_module('final_{0}_tanh'.format(nc), nn.Tanh())
         main_2.add_module('reshape', ReshapeSplats())
@@ -668,11 +672,6 @@ class _netD(nn.Module):
             )
             # state size. (ndf*8) x 4 x 4
         self.main2 = nn.Sequential(nn.Conv2d(ndf * 12+nz, 1, 1, 1, 0, bias=True)
-
-
-
-
-
         )
 
     def forward(self, x, z, z2):

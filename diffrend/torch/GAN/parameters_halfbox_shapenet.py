@@ -171,6 +171,7 @@ class Parameters():
                                                                      'camera at a fixed distance.')
 
         # Rendering parameters
+        self.parser.add_argument('--no_renderer', action='store_true', help='Let the generator output an image directly')
         self.parser.add_argument('--splats_img_size', type=int, default=128, help='the height / width of the number of generator splats')
         self.parser.add_argument('--render_type', type=str, default='img', help='render the image or the depth map [img, depth]')
         self.parser.add_argument('--render_img_size', type=int, default=128, help='Width/height of the rendering image')

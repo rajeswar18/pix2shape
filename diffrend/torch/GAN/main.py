@@ -946,8 +946,15 @@ class GAN(object):
                     fake_z = self.netG(self.noisev, self.inputv_cond)
                     # The normal generator is dependent on z
 
-                    fake_rendered, fd, loss = self.render_batch(
-                        fake_z, self.inputv_cond)
+                    if self.opt.no_renderer:
+                        # In this case, the output is the image, not depth
+                        # This image is flattened, we need to restructure it to 2D
+                        temp = fake_z.permute(0, 2, 1)
+                        fake_rendered = temp.view(temp.shape[0], temp.shape[1], int(np.sqrt(temp.shape[2])), -1)
+                    else:
+                        fake_rendered, fd, loss = self.render_batch(
+                            fake_z, self.inputv_cond)
+
                     # Do not bp through gen
                     outD_fake = self.netD(fake_rendered.detach(),
                                           self.inputv_cond.detach(),self.noisev.detach())
@@ -992,11 +999,19 @@ class GAN(object):
                 self.in_critic=0
                 self.generate_noise_vector()
                 fake_z = self.netG(self.noisev, self.inputv_cond)
-                if iteration % self.opt.print_interval*4 == 0:
+                if not self.opt.no_renderer and iteration % self.opt.print_interval*4 == 0:
                     fake_z.register_hook(self.tensorboard_hook)
 
-                fake_rendered, fd, loss = self.render_batch(
-                    fake_z, self.inputv_cond)
+                if self.opt.no_renderer:
+                    # In this case, the output is the image, not depth
+                    # This image is flattened, we need to restructure it to 2D
+                    temp = fake_z.permute(0, 2, 1)
+                    fake_rendered = temp.view(temp.shape[0], temp.shape[1], int(np.sqrt(temp.shape[2])), -1)
+                    loss = 0
+                else:
+                    fake_rendered, fd, loss = self.render_batch(
+                        fake_z, self.inputv_cond)
+
                 outG_fake = self.netD(fake_rendered, self.inputv_cond, self.noisev)
 
                 if self.opt.criterion == 'GAN':
@@ -1027,8 +1042,14 @@ class GAN(object):
                     raise ValueError('Unknown GAN criterium')
                 reconstruction_z = self.netG(z_real, self.inputv_cond)
 
-                reconstruction_rendered, reconstructiond, loss = self.render_batch(
-                    reconstruction_z, self.inputv_cond)
+                if self.opt.no_renderer:
+                    # In this case, the output is the image, not depth
+                    # This image is flattened, we need to restructure it to 2D
+                    temp = reconstruction_z.permute(0, 2, 1)
+                    reconstruction_rendered = temp.view(temp.shape[0], temp.shape[1], int(np.sqrt(temp.shape[2])), -1)
+                else:
+                    reconstruction_rendered, reconstructiond, loss = self.render_batch(
+                        reconstruction_z, self.inputv_cond)
 
                 mse_criterion = nn.MSELoss().cuda()
                 reconstruction_loss = mse_criterion(reconstruction_rendered, self.inputv)
@@ -1054,7 +1075,7 @@ class GAN(object):
 
 
                 # Log print
-                if iteration % self.opt.print_interval == 0:
+                if not self.opt.no_renderer and iteration % self.opt.print_interval == 0:
 
                     l2_loss = mse_criterion(fd, self.inputv_depth)
                     Wassertein_D = (errD_real.data[0] - errD_fake.data[0])
@@ -1093,8 +1114,6 @@ class GAN(object):
 
                 # Save output images
                 if iteration % (self.opt.save_image_interval) == 0 and iteration % (2*self.opt.save_image_interval) !=0:
-                    cs = tch_var_f(contrast_stretch_percentile(
-                        get_data(fd), 200, [fd.data.min(), fd.data.max()]))
                     torchvision.utils.save_image(
                         fake_rendered.data,
                         os.path.join(self.opt.vis_images,
@@ -1114,11 +1133,15 @@ class GAN(object):
                     fake_z = self.netG(self.noisev, cam_pos)
                     # The normal generator is dependent on z
 
-                    fake_rendered, fd, loss = self.render_batch(
-                        fake_z, cam_pos)
+                    if self.opt.no_renderer:
+                        # In this case, the output is the image, not depth
+                        # This image is flattened, we need to restructure it to 2D
+                        temp = fake_z.permute(0, 2, 1)
+                        fake_rendered = temp.view(temp.shape[0], temp.shape[1], int(np.sqrt(temp.shape[2])), -1)
+                    else:
+                        fake_rendered, fd, loss = self.render_batch(
+                            fake_z, cam_pos)
 
-                    cs = tch_var_f(contrast_stretch_percentile(
-                        get_data(fd), 200, [fd.data.min(), fd.data.max()]))
                     torchvision.utils.save_image(
                         fake_rendered.data,
                         os.path.join(self.opt.vis_images,
@@ -1127,8 +1150,6 @@ class GAN(object):
 
                 # Save input images
                 if iteration % (self.opt.save_image_interval) == 0:
-                    cs = tch_var_f(contrast_stretch_percentile(
-                        get_data(fd), 200, [fd.data.min(), fd.data.max()]))
                     torchvision.utils.save_image(
                         self.inputv.data, os.path.join(
                             self.opt.vis_images, 'input_%d.png' % (iteration)),
