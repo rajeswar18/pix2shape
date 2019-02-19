@@ -520,7 +520,13 @@ class GAN(object):
             data.append(im)
             data_depth.append(im_d)
             data_normal.append(im_n)
-            data_cond.append(large_scene['camera']['eye'])
+            if self.opt.no_renderer:
+                # If we aren't using a renderer, it is more fair to condition the network on the light position
+                # since the renderer had access to that value explicitly
+                data_cond_item = torch.cat((large_scene['camera']['eye'], large_scene['lights']['pos'][0,:3]), 0)
+            else:
+                data_cond_item = large_scene['camera']['eye']
+            data_cond.append(data_cond_item)
         # Stack real samples
         real_samples = torch.stack(data)
         real_samples_depth = torch.stack(data_depth)

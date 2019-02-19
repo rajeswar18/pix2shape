@@ -43,6 +43,9 @@ class Parameters():
         elif username == 'voletivi' or username == 'user1':
             default_root = '/u/voletivi/datasets/diffrend/data/cube'
             default_out = './render_samples'
+        elif username == 'parentjl':
+            default_root = '/network/home/parentjl/pix2scene/data/cube'
+            default_out = '/network/home/parentjl/pix2scene/out'
         else:
             raise ValueError('Add the route for the dataset of your system')
 

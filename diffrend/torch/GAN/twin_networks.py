@@ -43,6 +43,8 @@ def create_networks(opt, verbose=True, **params):
         else:
             splats_n_dims += 3
 
+    cond_size = 6 if opt.no_renderer else 3
+
     # Create generator network
     if opt.gen_type == 'mlp':
         netG = _netG_mlp(ngpu, nz, ngf, splats_n_dims, n_splats)
@@ -50,7 +52,7 @@ def create_networks(opt, verbose=True, **params):
         netG = _netG(ngpu, nz, ngf, splats_n_dims, use_tanh=False,
                      bias_type=opt.gen_bias_type)
     elif opt.gen_type == 'dcgan':
-        netG = DCGAN_G(splats_img_size, nz, splats_n_dims, ngf, ngpu,
+        netG = DCGAN_G(splats_img_size, nz, splats_n_dims, ngf, ngpu, cond_size=cond_size,
                        n_extra_layers=gen_nextra_layers, use_tanh=False,
                        norm=gen_norm)
         if 'depth_only' in params and params['depth_only'] is True:
@@ -83,7 +85,7 @@ def create_networks(opt, verbose=True, **params):
     # Create the discriminator network
     if opt.disc_type == 'cnn':
         if render_img_size == 128:
-            netD = _netD(ngpu, 3, ndf, render_img_size,nz,
+            netD = _netD(ngpu, 3, ndf, render_img_size,nz, cond_size=cond_size,
                          use_sigmoid=use_sigmoid)
         else:
             netD = _netD_256(ngpu, 3, ndf, render_img_size,nz,
@@ -411,7 +413,7 @@ class DCGAN_G2(nn.Module):
 class DCGAN_G(nn.Module):
     """DCGAN generator."""
 
-    def __init__(self, isize, nz, nc, ngf, ngpu, n_extra_layers=0,
+    def __init__(self, isize, nz, nc, ngf, ngpu, cond_size=3, n_extra_layers=0,
                  use_tanh=False, norm=nn.BatchNorm2d):
         """Constructor."""
 
@@ -429,7 +431,7 @@ class DCGAN_G(nn.Module):
         main_2 = nn.Sequential()
         # input is Z, going into a convolution
         main.add_module('initial_{0}-{1}_convt'.format(nz, cngf),
-                        nn.ConvTranspose2d(nz+3, cngf, 4, 1, 0, bias=False))
+                        nn.ConvTranspose2d(nz+cond_size, cngf, 4, 1, 0, bias=False))
         if norm is not None:
             main.add_module('initial_{0}_batchnorm'.format(cngf),
                             norm(cngf))
@@ -441,7 +443,7 @@ class DCGAN_G(nn.Module):
         while csize < isize // 2:
             if i == 0:
                 main_2.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
-                            nn.ConvTranspose2d(cngf+3, cngf // 2, 4, 2, 1,
+                            nn.ConvTranspose2d(cngf+cond_size, cngf // 2, 4, 2, 1,
                                                bias=False))
             else:
                 main_2.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
@@ -641,14 +643,14 @@ class _netG_resnet(nn.Module):
 # Discriminators
 #############################################
 class _netD(nn.Module):
-    def __init__(self, ngpu, nc, ndf, isize, nz, use_sigmoid=0):
+    def __init__(self, ngpu, nc, ndf, isize, nz, cond_size=3, use_sigmoid=0):
         super(_netD, self).__init__()
         self.ngpu = ngpu
         self.use_sigmoid = use_sigmoid
 
         self.main = nn.Sequential(
             # input is (nc) x 64 x 64
-            nn.Conv2d(nc+3, ndf, 4, 2, 1, bias=True),
+            nn.Conv2d(nc+cond_size, ndf, 4, 2, 1, bias=True),
             #nn.Dropout(p=0.3),
             nn.LeakyReLU(),
             # state size. (ndf) x 32 x 32
