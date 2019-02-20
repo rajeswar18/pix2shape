@@ -37,9 +37,9 @@ class Parameters():
         elif username == 'sai' or username == 'root':
             #default_root = '/data/lisa/data/ShapeNetCore.v2'
             #default_root = '/home/dvazquez/datasets/shapenet/ShapeNetCore.v2'
-            default_root = '/home/sai/visualize/diffrend/data/cube'
+            default_root = '/mnt/home/sai/visualize/diffrend/data/cube'
             #default_out = './output'
-            default_out = '/home/sai/output_newcolor_12june'
+            default_out = '/mnt/home/sai/output_newcolor_12june'
         elif username == 'voletivi' or username == 'user1':
             default_root = '/u/voletivi/datasets/diffrend/data/cube'
             default_out = './render_samples'
@@ -83,9 +83,9 @@ class Parameters():
         # Network parameters
         self.parser.add_argument('--gen_type', type=str, default='dcgan', help='One of: mlp, cnn, dcgan, resnet') # try resnet :)
         self.parser.add_argument('--gen_norm', type=str, default='batchnorm', help='One of: None, batchnorm, instancenorm')
-        self.parser.add_argument('--ngf', type=int, default=75, help='number of features in the generator network')
+        self.parser.add_argument('--ngf', type=int, default=85, help='number of features in the generator network')
         self.parser.add_argument('--nef', type=int, default=65, help='number of features in the generator network')
-        self.parser.add_argument('--gen_nextra_layers', type=int, default=0, help='number of extra layers in the generator network')
+        self.parser.add_argument('--gen_nextra_layers', type=int, default=1, help='number of extra layers in the generator network')
         self.parser.add_argument('--gen_bias_type', type=str, default=None, help='One of: None, plane')
         self.parser.add_argument('--netG', default='', help="path to netG (to continue training)")
         self.parser.add_argument('--netG2', default='', help="path to netG2 (normal generator to continue training)")
@@ -159,7 +159,7 @@ class Parameters():
         self.parser.add_argument('--focal_length', type=float, default=0.1, help='focal length')
         self.parser.add_argument('--theta', nargs=2, type=float, default=[20,80], help='Angle in degrees from the z-axis.')
         self.parser.add_argument('--phi', nargs=2, type=float, default=[20,70], help='Angle in degrees from the x-axis.')
-        self.parser.add_argument('--axis', nargs=3, default=[0.,1.,0.],type=float, help='Axis for random camera position.')
+        self.parser.add_argument('--axis', nargs=3, default=[0.7,1.,1.],type=float, help='Axis for random camera position.')
         self.parser.add_argument('--cam_pos', nargs=3, type=float, help='Camera position.')
         self.parser.add_argument('--at', nargs=3, default=[0.05,0.0,0], type=float, help='Camera lookat position.')
         #self.parser.add_argument('--at', nargs=3, default=[ 0, 1, 0], type=float, help='Camera lookat position.')
