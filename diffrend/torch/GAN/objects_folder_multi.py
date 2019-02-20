@@ -62,7 +62,7 @@ class ObjectsFolderMultiObjectDataset(Dataset):
             f=obj_model['f']
         else:
             if self.opt.random_rotation:
-                random_axis = np_normalize(self.opt.axis)
+                random_axis = np_normalize(np.random.rand(3))
                 random_angle = np.random.rand(1) * np.pi * 2
                 M = axis_angle_matrix(axis=random_axis, angle=random_angle)
                 M[:3, 3] = offset
