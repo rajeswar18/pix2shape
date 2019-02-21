@@ -7,7 +7,7 @@ sys.path.append('../../../')
 import copy
 import numpy as np
 # from scipy.misc import imsave
-from imageio import imsave
+from imageio import imsave, mimwrite
 import datetime
 import os
 import shutil
@@ -34,6 +34,7 @@ from diffrend.torch.renderer import (render, render_splats_along_ray,
                                      z_to_pcl_CC)
 from diffrend.utils.sample_generator import uniform_sample_sphere
 from diffrend.utils.utils import contrast_stretch_percentile, save_xyz
+from diffrend.numpy.ops import sph2cart_vec
 from tensorboardX import SummaryWriter
 
 import matplotlib
@@ -1144,6 +1145,9 @@ class GAN(object):
                              'depthmap2_{:05d}.png'.format(iteration)),
                             get_data(fake_depth[2].squeeze()))
 
+                # Save output videos
+                if iteration % self.opt.save_video_interval == 0:
+                    self.save_video(self.noisev[0], iteration)
 
                 # if iteration % (2*self.opt.save_image_interval) == 0:
                 #
@@ -1186,6 +1190,27 @@ class GAN(object):
         # torch.save(self.netD2.state_dict(),
         #            '%s/netD2_epoch_%d.pth' % (self.opt.out_dir, epoch))
 
+    def save_video(self, single_z_real, iteration):
+        """Generate and save a video (gif) of a camera moving in one of the generated scene"""
+
+        theta = np.linspace(np.deg2rad(20), np.deg2rad(80), 80)
+        phi = np.ones_like(theta) * np.deg2rad(40)
+        cam_dist_vec = np.ones_like(theta) * self.opt.cam_dist#*0.8
+        cam_pos_1 = sph2cart_vec(np.stack((cam_dist_vec, phi, theta), axis=1))
+        phi_2 = np.linspace(np.deg2rad(40), np.deg2rad(70), 40)
+        theta_2 = np.ones_like(phi_2) * np.deg2rad(80)
+        cam_dist_vec_2 = np.ones_like(phi_2) * self.opt.cam_dist#*0.8
+        cam_pos_2 = sph2cart_vec(np.stack((cam_dist_vec_2, phi_2, theta_2), axis=1))
+        cam_pos = np.concatenate((cam_pos_1,cam_pos_2))
+
+        cond = tch_var_f(cam_pos)
+        fake_z = self.netG(single_z_real.repeat(120,1,1,1), cond)
+        fake_rendered = fake_z[:,:3]
+
+        out_path = os.path.join(self.opt.vis_videos, 'output_' + str(iteration))
+        mimwrite(out_path + '.gif', fake_rendered.data.cpu().numpy().transpose(0, 2, 3, 1), duration=0.025)
+        torchvision.utils.save_image(fake_rendered.data, out_path + '.png', nrow=10, normalize=True, scale_each=True)
+
     def save_images(self, epoch, input, output):
         """Save images."""
         if self.opt.render_img_nc == 1:
@@ -1210,7 +1235,7 @@ def main():
     # Create experiment output folder
     exp_dir = os.path.join(opt.out_dir, opt.name)
     mkdirs(exp_dir)
-    sub_dirs=['vis_images','vis_xyz','vis_monitoring']
+    sub_dirs=['vis_images','vis_xyz','vis_monitoring', 'vis_videos']
     for sub_dir in sub_dirs:
         dir_path = os.path.join(exp_dir, sub_dir)
         if not os.path.exists(dir_path):

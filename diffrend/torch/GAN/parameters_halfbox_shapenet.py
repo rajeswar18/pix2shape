@@ -179,6 +179,7 @@ class Parameters():
         self.parser.add_argument('--same_view', action='store_true', help='data with view fixed') # before we add conditioning on cam pose, this is necessary
         self.parser.add_argument('--print_interval', type=int, default=10, help='Print loss interval.')
         self.parser.add_argument('--save_image_interval', type=int, default=100, help='Save image interval.')
+        self.parser.add_argument('--save_video_interval', type=int, default=1000, help='Save video interval.')
         self.parser.add_argument('--save_interval', type=int, default=5000, help='Save state interval.')
 
     def parse(self):
