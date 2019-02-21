@@ -86,6 +86,8 @@ class Parameters():
         self.parser.add_argument('--ngf', type=int, default=85, help='number of features in the generator network')
         self.parser.add_argument('--nef', type=int, default=65, help='number of features in the generator network')
         self.parser.add_argument('--gen_nextra_layers', type=int, default=1, help='number of extra layers in the generator network')
+        self.parser.add_argument('--gen_nsame_conv', type=int, default=0, help='number of same convolution layers to add after each upsampling layer in the generator network')
+        self.parser.add_argument('--gen_upsampling_mode', type=str, default='deconv', help='Upsampling mode to use in the generator network (deconv, or any of pytorch upsampling modes)')
         self.parser.add_argument('--gen_bias_type', type=str, default=None, help='One of: None, plane')
         self.parser.add_argument('--netG', default='', help="path to netG (to continue training)")
         self.parser.add_argument('--netG2', default='', help="path to netG2 (normal generator to continue training)")
