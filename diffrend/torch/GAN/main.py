@@ -53,6 +53,8 @@ matplotlib.use('Agg')
 def copy_scripts_to_folder(expr_dir):
     """Copy scripts."""
     shutil.copy("twin_networks.py", expr_dir)
+    shutil.copytree("generator_networks", os.path.join(expr_dir, "generator_networks"))
+    shutil.copytree("discriminator_networks", os.path.join(expr_dir, "discriminator_networks"))
     shutil.copy("../params.py", expr_dir)
     shutil.copy("../renderer.py", expr_dir)
     shutil.copy("datasets.py", expr_dir)
