@@ -57,12 +57,6 @@ def create_networks(opt, verbose=True, **params):
         netG = DCGAN_G(splats_img_size, nz, splats_n_dims, ngf, ngpu, cond_size=cond_size,
                        n_extra_layers=gen_nextra_layers, use_tanh=False,
                        norm=gen_norm)
-        if 'depth_only' in params and params['depth_only'] is True:
-            netG2 = None
-        else:
-            netG2 = DCGAN_G2(splats_img_size, nz, splats_n_dims, ngf, ngpu,
-                             n_extra_layers=gen_nextra_layers, use_tanh=False,
-                             norm=gen_norm)
     elif opt.gen_type == 'resnet':
         netG = _netG_resnet(nz, splats_n_dims, n_splats)
     else:
@@ -73,16 +67,9 @@ def create_networks(opt, verbose=True, **params):
         netG.load_state_dict(torch.load(opt.netG))
     else:
         netG.apply(weights_init)
-    if opt.netG2 != '' and netG2 is not None:
-        netG2.load_state_dict(torch.load(opt.netG2))
-    elif netG2 is not None:
-        netG2.apply(weights_init)
 
     # If WGAN not use no_sigmoid
-    if opt.criterion == 'WGAN':
-        use_sigmoid = False
-    else:
-        use_sigmoid = True
+    use_sigmoid = opt.criterion != 'WGAN'
 
     # Create the discriminator network
     if opt.disc_type == 'cnn':
@@ -109,29 +96,6 @@ def create_networks(opt, verbose=True, **params):
     else:
         netD.apply(weights_init)
 
-    # new network
-    if opt.disc_type == 'cnn':
-        if render_img_size == 128:
-            netD2 = _netD(ngpu, 3, ndf, render_img_size,nz,
-                          use_sigmoid=use_sigmoid)
-        else:
-            netD2 = _netD_256(ngpu, 3, ndf, render_img_size,nz,
-                              use_sigmoid=use_sigmoid)
-        # else:
-        #     netD2 = _netD_64(ngpu, 3, ndf, render_img_size,
-        #                      use_sigmoid=use_sigmoid)
-    elif opt.disc_type == 'dcgan':
-        netD2 = DCGAN_D(render_img_size, nz, render_img_nc, ndf, ngpu,
-                        n_extra_layers=disc_nextra_layers,
-                        use_sigmoid=use_sigmoid, norm=disc_norm)
-    else:
-        raise ValueError("Unknown discriminator")
-
-    # Init weights/load pretrained model
-    if opt.netD != '':
-        netD2.load_state_dict(torch.load(opt.netD2))
-    else:
-        netD2.apply(weights_init)
     # Show networks
     netE = LatentEncoder( nz, 3, nef)
     if opt.netE != '':
@@ -141,11 +105,9 @@ def create_networks(opt, verbose=True, **params):
     if verbose:
         print(netG)
         print(netE)
-        print(netG2)
         print(netD)
-        print(netD2)
 
-    return netG, netG2, netD, netD2, netE
+    return netG, netD, netE
 
 
 def weights_init(m):

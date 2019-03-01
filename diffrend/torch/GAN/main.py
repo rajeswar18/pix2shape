@@ -193,8 +193,8 @@ class GAN(object):
 
     def create_networks(self, ):
         """Create networks."""
-        self.netG, _, self.netD, self.netD2, self.netE = create_networks(
-            self.opt, verbose=True, depth_only=True)  # TODO: Remove D2 and G2
+        self.netG, self.netD, self.netE = create_networks(
+            self.opt, verbose=True, depth_only=True)
         # Create the normal estimation network which takes pointclouds in the
         # camera space and outputs the normals
 
@@ -815,15 +815,10 @@ class GAN(object):
             print(' > Generator', self.opt.gen_model_path)
             self.netG.load_state_dict(
                 torch.load(open(self.opt.gen_model_path, 'rb')))
-            print(' > Generator2', self.opt.gen_model_path2)
-            self.netG2.load_state_dict(
-                torch.load(open(self.opt.gen_model_path2, 'rb')))
             print(' > Discriminator', self.opt.dis_model_path)
             self.netD.load_state_dict(
                 torch.load(open(self.opt.dis_model_path, 'rb')))
-            print(' > Discriminator2', self.opt.dis_model_path2)
-            self.netD2.load_state_dict(
-                torch.load(open(self.opt.dis_model_path2, 'rb')))
+            # TODO: Encoder Network?
 
         # Start training
         file_name = os.path.join(self.opt.out_dir, 'L2.txt')
@@ -1114,8 +1109,6 @@ class GAN(object):
                    '%s/netD_epoch_%d.pth' % (self.opt.out_dir, epoch))
         torch.save(self.netE.state_dict(),
                    '%s/netE_epoch_%d.pth' % (self.opt.out_dir, epoch))
-        torch.save(self.netD2.state_dict(),
-                   '%s/netD2_epoch_%d.pth' % (self.opt.out_dir, epoch))
 
     def save_images(self, epoch, input, output):
         """Save images."""
