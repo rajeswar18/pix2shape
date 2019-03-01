@@ -609,7 +609,10 @@ class GAN(object):
                 else:
                     self.scene['camera']['eye'] = batch_cond[0]
 
-            self.scene['lights']['pos'][0,:3]=tch_var_f(self.light_pos1[idx])
+            if batch_cond is None:
+                self.scene['lights']['pos'][0,:3]=tch_var_f(self.light_pos1[idx])
+            else:
+                self.scene['lights']['pos'][0,:3]=tch_var_f(self.light_pos1[0])
             #self.scene['lights']['pos'][1,:3]=tch_var_f(self.light_pos2[idx])
 
             # Render scene
@@ -804,7 +807,7 @@ class GAN(object):
         self.writer.add_histogram("z_gradient_hist_channel", grad[0].clone().cpu().data.numpy(),self.iteration_no)
 
         self.writer.add_image("z_gradient_im",
-                               grad[0].view(self.opt.splats_img_size,self.opt.splats_img_size),
+                               grad[0].view(-1, self.opt.splats_img_size,self.opt.splats_img_size),
                                self.iteration_no)
 
     def train(self, ):
@@ -1094,7 +1097,7 @@ class GAN(object):
         else:
             cond = tch_var_f(cam_pos)
             fake_z = self.netG(single_z_real.repeat(120,1,1,1), cond)
-            fake_rendered = self.render_batch(fake_z, cond, flag=1)[0]
+            fake_rendered = self.render_batch(fake_z, cond)[0]
 
         out_path = os.path.join(self.opt.vis_videos, 'output_' + str(iteration))
         imageio.mimwrite(out_path + '.gif', fake_rendered.data.cpu().numpy().transpose(0, 2, 3, 1), duration=0.025)
