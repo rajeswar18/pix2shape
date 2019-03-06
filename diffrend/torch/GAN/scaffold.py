@@ -23,10 +23,21 @@ from diffrend.torch.utils import tch_var_f, tch_var_l, Variable, generate_rays
 # - Are we still training this using through a GAN? We have supervised information now...
 # - Is this way of discretizing the hemisphere integral valid? See https://learnopengl.com/PBR/IBL/Diffuse-irradiance
 
-def depth_to_world_coord(depth, view, directions):
+def depth_to_world_coord(depth, view, ray_angles):
     # The camera positions need to be copied for each pixel in the images (add 2 dimensions)
     camera_pos = view[..., None, None, :3]
-    return camera_pos + depth * directions
+    camera_dir = view[..., None, None, 3:]
+
+    phi = ray_angles[...,0].unsqueeze(-1)
+    theta = ray_angles[...,1].unsqueeze(-1)
+    sin_theta = torch.sin(theta)
+    x = sin_theta * torch.cos(phi)
+    y = sin_theta * torch.sin(phi)
+    z = torch.zeros(*x.size())
+
+    direction = camera_dir + torch.cat((x, y, z), -1)
+    direction_normalized = direction / torch.norm(direction, p=2, dim=-1).unsqueeze(-1)
+    return camera_pos + depth * direction_normalized
 
 
 def estimate_normals(world_coords):
@@ -43,6 +54,36 @@ def estimate_normals(world_coords):
 
     # return world_coords / torch.norm(world_coords, p=2, dim=-1).unsqueeze(-1)
 
+def build_ray_angles(width, height, projection='fisheye'):
+    if projection == 'perspective':
+        # TODO clean up: use params
+        fovy = np.deg2rad(30)
+        focal_length = 0.1
+
+        aspect_ratio = width / height
+        h = np.tan(fovy / 2) * 2 * focal_length
+        w = h * aspect_ratio
+
+        x, y = torch.meshgrid(torch.linspace(-1, 1, width), torch.linspace(1, -1, height))
+
+        x *= w / 2
+        y *= h / 2
+
+        x = x.unsqueeze(-1)
+        y = y.unsqueeze(-1)
+        z = tch_var_f([-focal_length]).repeat(*x.size()[:-1], 1)
+
+        xyz = torch.cat((x, y, z), -1)
+        theta = torch.acos(tensor_dot(xyz, tch_var_f([0, 0, -1]).repeat(*xyz.size()[:-1], 1), axis=-1).unsqueeze(-1))
+        phi = torch.atan2(x, y)
+        return torch.cat((phi, theta), -1)
+    elif projection == 'fisheye':
+        phi, theta = torch.meshgrid(torch.linspace(0, 2*np.pi, width), torch.linspace(0, np.pi, height))
+        phi = phi.unsqueeze(-1)
+        theta = theta.unsqueeze(-1)
+        return torch.cat((phi, theta), -1)
+    else:
+        raise ValueError(f'Unsupported projection {projection}')
 
 def build_rays(view, width, height, projection='fisheye'):
     # If the tensor has more than 2 dimensions, "fold" everything in the 'batch' dimension
@@ -85,13 +126,13 @@ class SurfelsModel(nn.Module):
         super(SurfelsModel, self).__init__()
         self.render = render
 
-    def forward(self, z, view, rays, projection='perspective'):
+    def forward(self, z, view, ray_angles, projection='perspective'):
         # TODO: Use theta, phi pairs instead of 3D rays. I believe this would help
 
         # If the input tensors have more than 2 dimensions, "fold" everything in the 'batch' dimension
         input_view = view.view(-1, view.size(-1))
         # Notice that the rays are also folded in the same way, since each ray can be computed independently
-        input_rays = rays.view(-1, rays.size(-1))
+        input_ray_angles = ray_angles.view(-1, ray_angles.size(-1))
 
         print("SurfelsModel")
         # print(input.size())
@@ -104,10 +145,9 @@ class SurfelsModel(nn.Module):
         # emittance = output[..., 4:]
 
         # TODO remove
-        depth = self.render(view, rays.size(-3), rays.size(-2), projection=projection)
-        print(f"Depth size: {depth.size()}")
-        albedo = tch_var_f([0.5, 0.5, 0.5]).repeat(*rays.size()[:-1], 1)
-        emittance = tch_var_f([0.1, 0.1, 0.1]).repeat(*rays.size()[:-1], 1)
+        depth = self.render(view, ray_angles.size(-3), ray_angles.size(-2), projection=projection)
+        albedo = tch_var_f([0.5, 0.5, 0.5]).repeat(*ray_angles.size()[:-1], 1)
+        emittance = tch_var_f([0.1, 0.1, 0.1]).repeat(*ray_angles.size()[:-1], 1)
 
         # unfold the result
         return depth, albedo, emittance
@@ -120,7 +160,7 @@ class RootIrradiance(nn.Module):
         self.width = width
         self.height = height
 
-    def forward(self, z, view, rays=None):
+    def forward(self, z, view, ray_angles=None):
         # print("RootIrradiance")
         # print(view.size())
         # TODO is rays necessary here? If so, remove '=None' in params
@@ -147,53 +187,55 @@ class Renderer(nn.Module):
         else:
             self.next_renderer = RootIrradiance(next_width, next_height)
 
-    def forward(self, z, view, rays=None):
+    def forward(self, z, view, ray_angles=None):
         """
         z: latent code. Shape: (batch, z_size)
         view: camera views. Shape: (batch, n, n, n//8, n//8, n//16, ..., 6) depending on which self.level we are at
         view[...,:3] is expected to be the camera position and view[...,3:] to be the direction in which the camera is looking
         """
         projection = 'fisheye'
-        if rays is None:
+        if ray_angles is None:
             # For the first recursion level, we want to output a planar image, not a fisheye representation
             # in order to be able to directly compare it to the input image
-            rays = build_rays(
-                view, self.width, self.height, projection='perspective')
+            ray_angles = build_ray_angles(self.width, self.height,
+                            projection='perspective')
             projection = 'perspective'
 
         # Local properties needs to change based on whether we are rendering a fisheye view or a planar view
         # For this reason, it also needs to be passed the rays
-        depth, albedo, emittance = self.surfels_model(z, view, rays, projection=projection)
+        depth, albedo, emittance = self.surfels_model(z, view,
+                                    ray_angles, projection=projection)
 
-        world_coords = depth_to_world_coord(depth, view, rays)
+        world_coords = depth_to_world_coord(depth, view, ray_angles)
         normals = estimate_normals(world_coords)
 
         # The new camera views. Place a camera at each surfel position, looking in the direction of the normal
         next_views = torch.cat([world_coords, normals], -1)
-        next_rays = build_rays(
-            next_views, self.next_renderer.width, self.next_renderer.height, projection='fisheye')
+        next_ray_angles = build_ray_angles(self.next_renderer.width,
+                        self.next_renderer.height, projection='fisheye')
         irradiance, saved_outputs = self.next_renderer(
-            z, next_views, rays=next_rays)  # Pass incident_directions to avoid a recomputation
+            z, next_views, ray_angles=next_ray_angles)  # Pass incident_directions to avoid a recomputation
 
-        # Make sure the normals match the incident_directions size
-        normals = normals[..., None, None, :]  # Add 2 dimensions
-
-        # TODO: Completely redundant to compute the cosine here, we already have the angles
-        incident_cosines = F.relu(tensor_dot(
-            next_rays, normals, axis=-1)).unsqueeze(-1)  # cos(theta_i), with backface culling
-        incident_sines = torch.sqrt(1 - incident_cosines**2)  # sin(theta_i)
+        incident_cosines = torch.cos(next_ray_angles[...,1].unsqueeze(-1)) # cos(theta_i)
+        incident_sines = torch.sin(next_ray_angles[...,1].unsqueeze(-1)) # sin(theta_i)
         n = self.next_renderer.width * self.next_renderer.height
 
         # Rendering equation for a discretized irradiance with lambertian diffuse surfaces:
         # See https://learnopengl.com/PBR/IBL/Diffuse-irradiance
+        print(f"Min in incident_cosines: {torch.min(incident_cosines)}, Max: {torch.max(incident_cosines)}, Avg: {torch.mean(incident_cosines)}")
+        print(f"Min in incident_sines: {torch.min(incident_sines)}, Max: {torch.max(incident_sines)}, Avg: {torch.mean(incident_sines)}")
+        print(f"Min in irradiance: {torch.min(irradiance)}, Max: {torch.max(irradiance)}, Avg: {torch.mean(irradiance)}")
+        whatever = irradiance * incident_cosines * incident_sines
+        print(whatever.size())
+        print(f"Min in whatever: {torch.min(whatever)}, Max: {torch.max(whatever)}, Avg: {torch.mean(whatever)}")
+
         output_image = emittance + albedo / n * \
-            torch.sum(irradiance * incident_cosines * incident_sines, (-2, -3))
+            torch.sum(whatever, (-2, -3))
 
         # Concatenate the results from the next recursion level with these
         # These are the outputs that we can run a loss through to train the networks
         saved_outputs.append({
             'view': view,
-            'rays': rays,
             'output_image': output_image,
             'depth': depth,
             'albedo': albedo,
