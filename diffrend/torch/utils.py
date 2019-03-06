@@ -387,6 +387,19 @@ def generate_rays(camera):
 
         # normalize ray direction
         ray_dir /= torch.sqrt(torch.sum(ray_dir ** 2, dim=0))
+    elif proj_type == 'fisheye':
+        theta, phi = np.meshgrid(np.linspace(0, 2*np.pi, W), np.linspace(0, np.pi, H))
+        x = tch_var_f((np.sin(phi) * np.cos(theta)).ravel())
+        y = tch_var_f((np.sin(phi) * np.sin(theta)).ravel())
+        z = tch_var_f(np.cos(phi).ravel())
+
+        ray_orig = eye[np.newaxis, :]
+        ray_dir = torch.stack((x, y, z), dim=0)
+        inv_view_matrix = lookat_rot_inv(eye=eye, at=at, up=up)
+        ray_dir = torch.mm(inv_view_matrix, ray_dir)
+
+        # normalize ray direction
+        ray_dir /= torch.sqrt(torch.sum(ray_dir ** 2, dim=0))
 
     return ray_orig, ray_dir, H, W
 
