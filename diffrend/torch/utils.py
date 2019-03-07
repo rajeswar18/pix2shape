@@ -213,6 +213,7 @@ def ray_plane_intersection(ray_orig, ray_dir, plane, **kwargs):
 
     # check for denom = 0
     intersection_mask = torch.abs(denom) > 0
+    denom = where(intersection_mask, denom, 1e-8) # Avoid dividing by zero
 
     ray_dist = (dist.unsqueeze(-1) - torch.mm(normal, ray_orig.permute(1, 0))) / denom
 
