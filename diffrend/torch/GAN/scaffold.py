@@ -9,12 +9,13 @@ from diffrend.torch.utils import tensor_dot, estimate_surface_normals_plane_fit,
 # Imports for test2():
 import os
 import datetime
+from imageio import imwrite
 from diffrend.torch.GAN.datasets import Dataset_load
 from diffrend.torch.GAN.parameters_halfbox_shapenet import Parameters
 from diffrend.utils.sample_generator import uniform_sample_sphere
 from diffrend.torch.renderer import render
 from diffrend.torch.GAN.main import mkdirs, copy_scripts_to_folder, GAN, create_scene
-from diffrend.torch.utils import tch_var_f, tch_var_l, Variable, generate_rays, lookat_rot_inv
+from diffrend.torch.utils import tensor_f, tensor_l, device, generate_rays, lookat_rot_inv
 
 # NOTE: QUESTIONS:
 # - Occlusion in the other architectures? If we don't care, should I then implement this
@@ -29,7 +30,7 @@ def depth_to_world_coord(depth, view, ray_angles):
     camera_pos = view[..., None, None, :3]
     camera_dir = view[..., None, None, 3:]
 
-    camera_up = tch_var_f([0, 1, 0]).repeat(
+    camera_up = tensor_f([0, 1, 0]).repeat(
         *camera_dir.size()[:-1], 1)  # TODO use params
 
     phi = ray_angles[..., 0].unsqueeze(-1)  # + phi_cam_dir.unsqueeze(-1)
@@ -71,11 +72,11 @@ def build_ray_angles(width, height, projection='fisheye'):
         w = h * aspect_ratio
 
         x, y = torch.meshgrid(
-            torch.linspace(-w / 2, w / 2, width), torch.linspace(-h / 2, h / 2, height))
+            torch.linspace(-w / 2, w / 2, width, device=device), torch.linspace(-h / 2, h / 2, height, device=device))
 
         x = x.unsqueeze(-1)
         y = y.unsqueeze(-1)
-        z = tch_var_f([-focal_length]).repeat(*x.size()[:-1], 1)
+        z = tensor_f([-focal_length]).repeat(*x.size()[:-1], 1)
 
         xyz = torch.cat((x, y, z), -1)
         xyz_normalized = xyz / torch.norm(xyz, p=2, dim=-1).unsqueeze(-1)
@@ -85,9 +86,9 @@ def build_ray_angles(width, height, projection='fisheye'):
     elif projection == 'fisheye':
         # For some reason torch.linspace does not work with a step count of 1...
         phi = torch.linspace(
-            0, 2 * np.pi, width) if width > 1 else tch_var_f([np.pi])
+            0, 2 * np.pi, width, device=device) if width > 1 else tensor_f([np.pi])
         theta = torch.linspace(
-            0, np.pi / 2, height) if height > 1 else tch_var_f([np.pi / 4])
+            0, np.pi / 2, height, device=device) if height > 1 else tensor_f([np.pi / 4])
         phi, theta = torch.meshgrid(phi, theta)
         phi = phi.unsqueeze(-1)
         theta = theta.unsqueeze(-1)
@@ -139,8 +140,8 @@ class SurfelsModel(nn.Module):
         #     plt.imshow(im / 255)
         #     plt.show()
 
-        albedo = tch_var_f([0.5, 0.5, 0.5]).repeat(*ray_angles.size()[:-1], 1)
-        emittance = tch_var_f([0., 0., 0.]).repeat(
+        albedo = tensor_f([0.5, 0.5, 0.5]).repeat(*ray_angles.size()[:-1], 1)
+        emittance = tensor_f([0., 0., 0.]).repeat(
             *ray_angles.size()[:-1], 1)
 
         # unfold the result
@@ -161,7 +162,6 @@ class RootIrradiance(nn.Module):
         # TODO is rays necessary here? If so, remove '=None' in params
         images = self.render(view, ray_angles.size(-3),
                              ray_angles.size(-2), projection='fisheye')['image']
-        print(f"NAN CHECK ROOTIRRADIANCE: {torch.isnan(images).any()}")
         return images / 255, []
 
         # return torch.rand(*view.size()[:-1], self.width, self.height, 3), []
@@ -169,7 +169,7 @@ class RootIrradiance(nn.Module):
 
 
 class Renderer(nn.Module):
-    def __init__(self, render, width=128, height=128, level=0, max_level=1, surfels_model=None):
+    def __init__(self, render, width=128, height=128, decay=8, level=0, max_level=1, surfels_model=None):
         super(Renderer, self).__init__()
 
         self.width = width
@@ -179,11 +179,12 @@ class Renderer(nn.Module):
             render)
 
         # TODO pixel-wise russian roulette?
-        next_width = max(1, width // 8)
-        next_height = max(1, height // 8)
+        next_width = max(1, width // decay)
+        next_height = max(1, height // decay)
         if level < max_level:
-            self.next_renderer = Renderer(render,
-                                          width=next_width, height=next_height, level=level+1, max_level=max_level,
+            self.next_renderer = Renderer(render, width=next_width,
+                                          height=next_height, decay=decay,
+                                          level=level+1, max_level=max_level,
                                           surfels_model=self.surfels_model)
         else:
             self.next_renderer = RootIrradiance(
@@ -239,7 +240,7 @@ class Renderer(nn.Module):
             f"Min in whatever: {torch.min(whatever)}, Max: {torch.max(whatever)}, Avg: {torch.mean(whatever)}")
 
         output_image = emittance + albedo * np.pi / n * \
-            torch.sum(irradiance * incident_cosines * incident_sines, (-2, -3))
+            torch.sum(whatever, (-2, -3))
 
         # Concatenate the results from the next recursion level with these
         # These are the outputs that we can run a loss through to train the networks
@@ -256,8 +257,8 @@ class Renderer(nn.Module):
 def test():
     r = Renderer()
     batch_size = 4
-    z = torch.zeros(batch_size, 256)
-    view = torch.zeros(batch_size, 6)
+    z = torch.zeros(batch_size, 256, device=device)
+    view = torch.zeros(batch_size, 6, device=device)
     output_image, saved_outputs = r(z, view)
     print(f"Output image size: {output_image.size()}")
     print(f"Saved output dimensionality: {len(saved_outputs)}")
@@ -272,6 +273,7 @@ def test2():
 
     opt.width, opt.height = 128, 128  # TODO remove
     opt.cam_dist = 0.8
+    decay = 8
     scene = create_scene(opt.width, opt.height,
                          opt.fovy, opt.focal_length,
                          opt.n_splats)
@@ -290,13 +292,10 @@ def test2():
     dataset_loader.initialize_dataset_loader(1)
     samples = iter(dataset_loader.get_dataset_loader()).next()
 
-    scene['objects']['triangle']['material_idx'] = tch_var_l(
-        np.zeros(samples['mesh']['face'][0].shape[0],
-                 dtype=int).tolist())
-    scene['objects']['triangle']['face'] = Variable(
-        samples['mesh']['face'][0], requires_grad=False)
-    scene['objects']['triangle']['normal'] = Variable(
-        samples['mesh']['normal'][0], requires_grad=False)
+    scene['objects']['triangle']['material_idx'] = tensor_l(
+        np.zeros(samples['mesh']['face'][0].shape[0], dtype=int).tolist())
+    scene['objects']['triangle']['face'] = samples['mesh']['face'][0].to(device)
+    scene['objects']['triangle']['normal'] = samples['mesh']['normal'][0].to(device)
 
     cam_pos = uniform_sample_sphere(
         radius=opt.cam_dist, num_samples=1,
@@ -304,16 +303,18 @@ def test2():
         theta_range=np.deg2rad(opt.theta),
         phi_range=np.deg2rad(opt.phi))
 
-    scene['camera']['at'] = tch_var_f([0.05, 0.0, 0.0])
-    scene['camera']['eye'] = tch_var_f(cam_pos[0])
+    scene['camera']['at'] = tensor_f([0.05, 0.0, 0.0])
+    scene['camera']['eye'] = tensor_f(cam_pos[0])
     # scene['camera']['eye'] = tch_var_f([opt.cam_dist, 0, 0])
 
     res = render(scene,
                  norm_depth_image_only=opt.norm_depth_image_only,
                  double_sided=True, use_quartic=opt.use_quartic)
 
-    plt.imshow(res['image'] / torch.max(res['image']))
-    plt.show()
+    imwrite('original_render.png',
+            (res['image'] / torch.max(res['image'])).cpu().numpy())
+    # plt.imshow(res['image'] / torch.max(res['image']))
+    # plt.show()
 
     def render_new_view(view, width, height, projection='perspective'):
         input_views = view.view(-1, view.size(-1))
@@ -346,9 +347,9 @@ def test2():
             'image': images.view(*view.size()[:-1], *images.size()[-3:])
         }
 
-    r = Renderer(render_new_view, max_level=1,
+    r = Renderer(render_new_view, max_level=1, decay=decay,
                  width=opt.width, height=opt.height)
-    z = torch.zeros(256)
+    z = torch.zeros(256, device=device)
     view_dir = (scene['camera']['at'] - scene['camera']['eye']) / \
         torch.norm(scene['camera']['at'] - scene['camera']['eye'], p=2)
     view = torch.cat([scene['camera']['eye'], view_dir])
@@ -363,8 +364,13 @@ def test2():
 
     # TODO this normalization seems to make a HUGE difference since I observed that this max
     # can be as low as 0.02... probably because we do not make use of direct light
-    plt.imshow(output_image / torch.max(output_image))
-    plt.show()
+    imwrite('output_image.png', (output_image /
+                                 torch.max(output_image)).cpu().numpy())
+    imwrite('output_image2.png', ((output_image - torch.min(output_image)) /
+                                 (torch.max(output_image) - torch.min(output_image))).cpu().numpy())
+    imwrite('output_image_unscaled.png', output_image.cpu().numpy())
+    # plt.imshow(output_image / torch.max(output_image))
+    # plt.show()
 
 
 if __name__ == '__main__':

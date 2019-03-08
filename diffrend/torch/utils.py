@@ -9,10 +9,12 @@ if torch.cuda.is_available() and not CPU_ONLY:
     CUDA = True
     FloatTensor = torch.cuda.FloatTensor
     LongTensor = torch.cuda.LongTensor
+    device = torch.device("cuda:0")
 else:
     CUDA = False
     FloatTensor = torch.FloatTensor
     LongTensor = torch.LongTensor
+    device = torch.device("cpu")
 
 print('CUDA support ', CUDA)
 
@@ -20,6 +22,9 @@ tch_var = lambda x, fn_type, req_grad: Variable(fn_type(x),
                                                 requires_grad=req_grad)
 tch_var_f = lambda x: tch_var(x, FloatTensor, False)
 tch_var_l = lambda x: tch_var(x, LongTensor, False)
+
+tensor_f = lambda data: torch.tensor(data, dtype=torch.float32, device=device)
+tensor_l = lambda data: torch.tensor(data, dtype=torch.long, device=device)
 
 
 def np_var(x, req_grad=False):
@@ -213,7 +218,7 @@ def ray_plane_intersection(ray_orig, ray_dir, plane, **kwargs):
 
     # check for denom = 0
     intersection_mask = torch.abs(denom) > 0
-    denom = where(intersection_mask, denom, 1e-8) # Avoid dividing by zero
+    denom = where(intersection_mask, denom, 1e-10) # Avoid dividing by zero
 
     ray_dist = (dist.unsqueeze(-1) - torch.mm(normal, ray_orig.permute(1, 0))) / denom
 
