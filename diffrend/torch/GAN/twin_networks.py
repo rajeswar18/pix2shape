@@ -113,10 +113,13 @@ def create_networks(opt, verbose=True, **params):
 def weights_init(m):
     """Weight initializer."""
     classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
+    if not hasattr(m, 'weight'):
+        return
+    if classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
+    else:
+        m.weight.data.normal_(0.0, 0.02)
+    if m.bias is not None:
         m.bias.data.fill_(0)
 
 
@@ -133,6 +136,10 @@ def _select_norm(norm):
     return norm
 
 
+class Print(nn.Module):
+    def forward(self, x):
+        # print(x.shape)
+        return x
 
 
 class LatentEncoder(nn.Module):
@@ -140,7 +147,8 @@ class LatentEncoder(nn.Module):
         super(LatentEncoder, self).__init__()
 
         use_bias = False
-        norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
+        # norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
+        norm_layer = functools.partial(nn.InstanceNorm2d, affine=True)
         kw = 3
         # sequence = [
         #     nn.Conv2d(input_nc, nef, kernel_size=kw, stride=2, padding=1, bias=True),
@@ -168,31 +176,40 @@ class LatentEncoder(nn.Module):
         #
         # ]
         sequence = [
+            Print(),
             nn.Conv2d(input_nc, nef, kernel_size=5, stride=1, padding=2, bias=True),
             nn.ReLU(True),
 
+            Print(),
             nn.Conv2d(nef, 2*nef, kernel_size=kw, stride=2, padding=1, bias=use_bias),
             norm_layer(2*nef),
             nn.ReLU(True),
 
+            Print(),
             nn.Conv2d(2*nef, 4*nef, kernel_size=kw, stride=2, padding=1, bias=use_bias),
             norm_layer(4*nef),
             nn.ReLU(True),
 
+            Print(),
             nn.Conv2d(4*nef, 4*nef, kernel_size=kw, stride=2, padding=1, bias=use_bias),
             norm_layer(4*nef),
             nn.ReLU(True),
 
+            Print(),
             nn.Conv2d(4*nef, 8*nef, kernel_size=kw, stride=2, padding=1, bias=use_bias),
             norm_layer(8*nef),
             nn.ReLU(True),
-        nn.Conv2d(8*nef, 8*nef, kernel_size=kw, stride=2, padding=1, bias=use_bias),
-            norm_layer(8*nef),
-            nn.ReLU(True),
 
+            # Print(),
+            # nn.Conv2d(8*nef, 8*nef, kernel_size=kw, stride=2, padding=1, bias=use_bias),
+            # norm_layer(8*nef),
+            # nn.ReLU(True),
+
+            Print(),
             nn.Conv2d(8*nef, 8*nef, kernel_size=4, stride=1, padding=0, bias=use_bias),
             norm_layer(8*nef),
             nn.ReLU(True),
+            Print()
         ]
 
         self.conv_modules = nn.Sequential(*sequence)

@@ -1,21 +1,19 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
+import torch.optim as optim
 import numpy as np
-import matplotlib.pyplot as plt
 
-from diffrend.torch.utils import tensor_dot, estimate_surface_normals_plane_fit, generate_rays
+from diffrend.torch.utils import tensor_f, tensor_l, device, tensor_dot, estimate_surface_normals_plane_fit
 
 # Imports for test2():
-import os
-import datetime
+import itertools
 from imageio import imwrite
 from diffrend.torch.GAN.datasets import Dataset_load
 from diffrend.torch.GAN.parameters_halfbox_shapenet import Parameters
 from diffrend.utils.sample_generator import uniform_sample_sphere
 from diffrend.torch.renderer import render
-from diffrend.torch.GAN.main import mkdirs, copy_scripts_to_folder, GAN, create_scene
-from diffrend.torch.utils import tensor_f, tensor_l, device, generate_rays, lookat_rot_inv
+from diffrend.torch.GAN.main import create_scene, gauss_reparametrize
+from diffrend.torch.GAN.twin_networks import LatentEncoder, weights_init
 
 # NOTE: QUESTIONS:
 # - Occlusion in the other architectures? If we don't care, should I then implement this
@@ -26,6 +24,7 @@ from diffrend.torch.utils import tensor_f, tensor_l, device, generate_rays, look
 
 
 def depth_to_world_coord(depth, view, ray_angles):
+    # print("Depth to world")
     # The camera positions need to be copied for each pixel in the images (add 2 dimensions)
     camera_pos = view[..., None, None, :3]
     camera_dir = view[..., None, None, 3:]
@@ -47,6 +46,7 @@ def depth_to_world_coord(depth, view, ray_angles):
 
 
 def estimate_normals(world_coords):
+    # print("Estimate Normals")
     input_wc = world_coords.view(-1, *world_coords.size()[-3:])
 
     # TODO Not batched :(
@@ -62,6 +62,7 @@ def estimate_normals(world_coords):
 
 
 def build_ray_angles(width, height, projection='fisheye'):
+    # print("Build ray angles")
     if projection == 'perspective':
         # TODO clean up: use params
         fovy = np.deg2rad(30)
@@ -103,99 +104,142 @@ class SurfelsModel(nn.Module):
     Combination of depth and local properties prediction
     """
 
-    def __init__(self, render):  # TODO remove
+    def __init__(self, latent_size):
         super(SurfelsModel, self).__init__()
-        self.render = render
+        self.latent_size = latent_size
+
+        self.network = nn.Sequential(
+            nn.Linear(latent_size + 5, 30),
+            nn.BatchNorm1d(30),
+            nn.LeakyReLU(0.01, True),
+            nn.Linear(30, 15),
+            nn.BatchNorm1d(15),
+            nn.LeakyReLU(0.01, True),
+            nn.Linear(15, 1),
+            nn.ReLU(True) # Make sure the depth output is positive
+        )
 
     def forward(self, z, view, ray_angles, projection='perspective'):
-        # TODO: Use theta, phi pairs instead of 3D rays. I believe this would help
+        # print(f"SurfelsModel {ray_angles.size(-3)}x{ray_angles.size(-2)}")
 
         # If the input tensors have more than 2 dimensions, "fold" everything in the 'batch' dimension
         input_view = view.view(-1, view.size(-1))
+        input_z = z.view(-1, z.size(-1))
         # Notice that the rays are also folded in the same way, since each ray can be computed independently
         input_ray_angles = ray_angles.view(-1, ray_angles.size(-1))
 
-        print("SurfelsModel")
-        # print(input.size())
+        input_camera_pos = input_view[...,:3].repeat(input_ray_angles.size(0), 1)
+        input_ray_angles = input_ray_angles.repeat(input_view.size(0), 1)
+        input_z = input_z.repeat(int(input_camera_pos.size(0) / input_z.size(0)), 1)
 
-        # TODO NN
+        input = torch.cat((input_z, input_camera_pos, input_ray_angles), -1)
 
-        # output = torch.zeros(*rays.size()[:-1], 7)
-        # depth = output[..., :1]
-        # albedo = output[..., 1:4]
-        # emittance = output[..., 4:]
-
-        # TODO remove
-        # if len(view.size()) > 2:
-        #     view = view[60:70, 60:70].contiguous()
-        res = self.render(view, ray_angles.size(-3),
-                          ray_angles.size(-2), projection=projection)
-        depth = res['depth']
-
-        # images = res['image']
-        # images = images.view(-1, *images.size()[-3:])
-        # for i, im in enumerate(images):
-        #     print(f"{i} / {len(images)}")
-        #     print(view.view(-1, view.size(-1))[i])
-        #     plt.imshow(im / 255)
-        #     plt.show()
-
-        albedo = tensor_f([0.5, 0.5, 0.5]).repeat(*ray_angles.size()[:-1], 1)
-        emittance = tensor_f([0., 0., 0.]).repeat(
-            *ray_angles.size()[:-1], 1)
+        output = self.network(input)
 
         # unfold the result
+        output = output.view(*view.size()[:-1], *ray_angles.size()[-3:-1], 1)
+
+        depth = output[..., :1]
+        # albedo = output[..., 1:4]
+        # emittance = output[..., 1:]
+
+        # TODO remove
+        albedo = tensor_f([0.5, 0.5, 0.5]).repeat(*view.size()[:-1], *ray_angles.size()[:-1], 1)
+        emittance = tensor_f([0., 0., 0.]).repeat(*view.size()[:-1], *ray_angles.size()[:-1], 1)
+
         return depth, albedo, emittance
-        # return output.view(*view.size()[:-1], *output.size()[-3:])
 
 
 class RootIrradiance(nn.Module):
-    def __init__(self, width, height, render):
+    def __init__(self, width, height, latent_size):
         super(RootIrradiance, self).__init__()
         self.width = width
         self.height = height
-        self.render = render  # TODO remove
+
+        # self.network2 = nn.Sequential(
+        #     nn.Upsample(size=(self.width, self.height), mode='bilinear'),
+        #     nn.Conv2d(100 + 6, 32, 3, padding=1, bias=False),
+        #     nn.BatchNorm2d(32),
+        #     nn.LeakyReLU(0.01, True),
+        #     nn.Conv2d(32, 3, 3, padding=1, bias=False)
+        # )
+
+        self.network = nn.Sequential(
+            nn.Linear(latent_size + 5, 30),
+            nn.BatchNorm1d(30),
+            nn.LeakyReLU(0.01, True),
+            nn.Linear(30, 15),
+            nn.BatchNorm1d(15),
+            nn.LeakyReLU(0.01, True),
+            nn.Linear(15, 3),
+            nn.ReLU(True) # Make sure the depth output is positive
+        )
 
     def forward(self, z, view, ray_angles=None):
-        # print("RootIrradiance")
+        # print(f"RootIrradiance {self.width}x{self.height}")
         # print(view.size())
         # TODO is rays necessary here? If so, remove '=None' in params
-        images = self.render(view, ray_angles.size(-3),
-                             ray_angles.size(-2), projection='fisheye')['image']
-        return images / 255, []
+        # input_view = view.view(-1, view.size(-1), 1, 1)
+        # input_z = z.view(-1, z.size(-1), 1, 1)
+        # input_z = input_z.repeat(int(input_view.size(0) / input_z.size(0)), 1, 1, 1)
+        # input = torch.cat((input_z, input_view), 1)
 
-        # return torch.rand(*view.size()[:-1], self.width, self.height, 3), []
-        # return torch.zeros(*view.size()[:-1], 1, 1, 3)
+        # output = self.network2(input)
+
+        # # Unfold the output and move the channel dimension back to the end
+        # output = output.view(*view.size()[:-1], *output.size()[-2:], output.size(-3))
+
+
+        # TODO: This is almost the exact same as in SurfelsModel. Merge the two
+        input_view = view.view(-1, view.size(-1))
+        input_z = z.view(-1, z.size(-1))
+        # Notice that the rays are also folded in the same way, since each ray can be computed independently
+        input_ray_angles = ray_angles.view(-1, ray_angles.size(-1))
+
+        input_camera_pos = input_view[...,:3].repeat(input_ray_angles.size(0), 1)
+        input_ray_angles = input_ray_angles.repeat(input_view.size(0), 1)
+        input_z = input_z.repeat(int(input_camera_pos.size(0) / input_z.size(0)), 1)
+
+        input = torch.cat((input_z, input_camera_pos, input_ray_angles), -1)
+
+        output = self.network(input)
+
+        # Unfold the output and move the channel dimension back to the end
+        output = output.view(*view.size()[:-1], *ray_angles.size()[-3:-1], 3)
+
+        return output, []
 
 
 class Renderer(nn.Module):
-    def __init__(self, render, width=128, height=128, decay=8, level=0, max_level=1, surfels_model=None):
+    def __init__(self, width=128, height=128, decay=8, min_size=[4, 4],
+                 level=0, max_level=1, surfels_model=None,
+                 latent_size=100):
         super(Renderer, self).__init__()
 
         self.width = width
         self.height = height
         self.level = level  # Recursion level
-        self.surfels_model = surfels_model if surfels_model is not None else SurfelsModel(
-            render)
+        self.surfels_model = surfels_model if surfels_model is not None else SurfelsModel(latent_size)
 
         # TODO pixel-wise russian roulette?
-        next_width = max(1, width // decay)
-        next_height = max(1, height // decay)
+        next_width = max(min_size[0], width // decay)
+        next_height = max(min_size[1], height // decay)
         if level < max_level:
-            self.next_renderer = Renderer(render, width=next_width,
-                                          height=next_height, decay=decay,
+            self.next_renderer = Renderer(width=next_width, height=next_height,
+                                          decay=decay, min_size=min_size,
                                           level=level+1, max_level=max_level,
-                                          surfels_model=self.surfels_model)
+                                          surfels_model=self.surfels_model,
+                                          latent_size=latent_size)
         else:
-            self.next_renderer = RootIrradiance(
-                next_width, next_height, render)
+            self.next_renderer = RootIrradiance(next_width, next_height, latent_size)
 
     def forward(self, z, view, ray_angles=None):
         """
         z: latent code. Shape: (batch, z_size)
         view: camera views. Shape: (batch, n, n, n//8, n//8, n//16, ..., 6) depending on which self.level we are at
-        view[...,:3] is expected to be the camera position and view[...,3:] to be the direction in which the camera is looking
+        view[...,:3] is expected to be the camera position and view[...,3:] to be the (normalized) direction in which the camera is looking
         """
+        # print(f"Renderer {self.width}x{self.height}")
         projection = 'fisheye'
         if ray_angles is None:
             # For the first recursion level, we want to output a planar image, not a fisheye representation
@@ -228,19 +272,18 @@ class Renderer(nn.Module):
         # Rendering equation for a discretized irradiance with lambertian diffuse surfaces:
         # See https://learnopengl.com/PBR/IBL/Diffuse-irradiance
         # and http://www.codinglabs.net/article_physically_based_rendering.aspx
-        print(
-            f"Min in incident_cosines: {torch.min(incident_cosines)}, Max: {torch.max(incident_cosines)}, Avg: {torch.mean(incident_cosines)}")
-        print(
-            f"Min in incident_sines: {torch.min(incident_sines)}, Max: {torch.max(incident_sines)}, Avg: {torch.mean(incident_sines)}")
-        print(
-            f"Min in irradiance: {torch.min(irradiance)}, Max: {torch.max(irradiance)}, Avg: {torch.mean(irradiance)}")
-        whatever = irradiance * incident_cosines * incident_sines
-        print(f"Size of whatever: {whatever.size()}")
-        print(
-            f"Min in whatever: {torch.min(whatever)}, Max: {torch.max(whatever)}, Avg: {torch.mean(whatever)}")
+        # print(
+        #     f"Min in incident_cosines: {torch.min(incident_cosines)}, Max: {torch.max(incident_cosines)}, Avg: {torch.mean(incident_cosines)}")
+        # print(
+        #     f"Min in incident_sines: {torch.min(incident_sines)}, Max: {torch.max(incident_sines)}, Avg: {torch.mean(incident_sines)}")
+        print(f"Min in irradiance: {torch.min(irradiance)}, Max: {torch.max(irradiance)}, Avg: {torch.mean(irradiance)}")
+        # whatever = irradiance * incident_cosines * incident_sines
+        # print(f"Size of whatever: {whatever.size()}")
+        # print(
+        #     f"Min in whatever: {torch.min(whatever)}, Max: {torch.max(whatever)}, Avg: {torch.mean(whatever)}")
 
         output_image = emittance + albedo * np.pi / n * \
-            torch.sum(whatever, (-2, -3))
+            torch.sum(irradiance * incident_cosines * incident_sines, (-2, -3))
 
         # Concatenate the results from the next recursion level with these
         # These are the outputs that we can run a loss through to train the networks
@@ -254,10 +297,12 @@ class Renderer(nn.Module):
         return output_image, saved_outputs
 
 
-def test():
-    r = Renderer()
-    batch_size = 4
-    z = torch.zeros(batch_size, 256, device=device)
+def test1():
+    batch_size = 2
+    latent_size = 100
+    width = height = 64
+    r = Renderer(latent_size=latent_size, width=width, height=height)
+    z = torch.zeros(batch_size, latent_size, device=device)
     view = torch.zeros(batch_size, 6, device=device)
     output_image, saved_outputs = r(z, view)
     print(f"Output image size: {output_image.size()}")
@@ -271,9 +316,12 @@ def test2():
     # Parse args
     opt = Parameters().parse()
 
-    opt.width, opt.height = 128, 128  # TODO remove
+    opt.width = opt.height = 64  # TODO remove
     opt.cam_dist = 0.8
+    opt.lr = 0.001
     decay = 8
+    latent_size = 100
+    max_level = 0
     scene = create_scene(opt.width, opt.height,
                          opt.fovy, opt.focal_length,
                          opt.n_splats)
@@ -290,87 +338,120 @@ def test2():
     dataset_loader = Dataset_load(opt)
     dataset_loader.initialize_dataset()
     dataset_loader.initialize_dataset_loader(1)
-    samples = iter(dataset_loader.get_dataset_loader()).next()
+    dataset_loader = dataset_loader.get_dataset_loader()
+    data_iter = iter(dataset_loader)
 
-    scene['objects']['triangle']['material_idx'] = tensor_l(
-        np.zeros(samples['mesh']['face'][0].shape[0], dtype=int).tolist())
-    scene['objects']['triangle']['face'] = samples['mesh']['face'][0].to(device)
-    scene['objects']['triangle']['normal'] = samples['mesh']['normal'][0].to(device)
-
-    cam_pos = uniform_sample_sphere(
-        radius=opt.cam_dist, num_samples=1,
-        axis=None, angle=None,
-        theta_range=np.deg2rad(opt.theta),
-        phi_range=np.deg2rad(opt.phi))
-
-    scene['camera']['at'] = tensor_f([0.05, 0.0, 0.0])
-    scene['camera']['eye'] = tensor_f(cam_pos[0])
-    # scene['camera']['eye'] = tch_var_f([opt.cam_dist, 0, 0])
-
-    res = render(scene,
-                 norm_depth_image_only=opt.norm_depth_image_only,
-                 double_sided=True, use_quartic=opt.use_quartic)
-
-    imwrite('original_render.png',
-            (res['image'] / torch.max(res['image'])).cpu().numpy())
-    # plt.imshow(res['image'] / torch.max(res['image']))
-    # plt.show()
-
-    def render_new_view(view, width, height, projection='perspective'):
-        input_views = view.view(-1, view.size(-1))
-        depths = []
-        images = []
-
-        scene['camera']['viewport'] = [0, 0, width, height]
-        scene['camera']['proj_type'] = projection
-
-        print(f"Rendering with sizes {width}, {height}")
-
-        for i, v in enumerate(input_views):
-            if i % 100 == 0:
-                print(f"Rendering {i} / {input_views.size(0)}")
-
-            scene['camera']['eye'] = v[:3]
-            scene['camera']['at'] = v[:3] + v[3:]
-            # TODO change render so that it also returns albedo and emittance
-
-            render_result = render(scene,
-                                   norm_depth_image_only=opt.norm_depth_image_only,
-                                   double_sided=True, use_quartic=opt.use_quartic)
-            depths.append(render_result['depth'].unsqueeze(-1))
-            images.append(render_result['image'])
-
-        depths = torch.stack(depths)
-        images = torch.stack(images)
-        return {
-            'depth': depths.view(*view.size()[:-1], *depths.size()[-3:]),
-            'image': images.view(*view.size()[:-1], *images.size()[-3:])
-        }
-
-    r = Renderer(render_new_view, max_level=1, decay=decay,
+    # Define the NN stuff
+    encoder = LatentEncoder(latent_size, 3, opt.nef)
+    renderer = Renderer(max_level=max_level, decay=decay, latent_size=latent_size,
                  width=opt.width, height=opt.height)
-    z = torch.zeros(256, device=device)
-    view_dir = (scene['camera']['at'] - scene['camera']['eye']) / \
-        torch.norm(scene['camera']['at'] - scene['camera']['eye'], p=2)
-    view = torch.cat([scene['camera']['eye'], view_dir])
-    output_image, saved_outputs = r(z, view)
-    print(f"Output image size: {output_image.size()}")
-    print(f"Saved output dimensionality: {len(saved_outputs)}")
-    for i, d in enumerate(reversed(saved_outputs)):
-        print(f"View size at level {i}: {d['view'].size()}")
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(itertools.chain(encoder.parameters(), renderer.parameters()),
+                           lr=opt.lr,
+                           betas=(opt.beta1, 0.999))
 
-    print(
-        f"Min in image: {torch.min(output_image)}, Max in image: {torch.max(output_image)}")
+    # Init the weights:
+    encoder.apply(weights_init)
+    renderer.apply(weights_init)
 
-    # TODO this normalization seems to make a HUGE difference since I observed that this max
-    # can be as low as 0.02... probably because we do not make use of direct light
-    imwrite('output_image.png', (output_image /
-                                 torch.max(output_image)).cpu().numpy())
-    imwrite('output_image2.png', ((output_image - torch.min(output_image)) /
-                                 (torch.max(output_image) - torch.min(output_image))).cpu().numpy())
-    imwrite('output_image_unscaled.png', output_image.cpu().numpy())
-    # plt.imshow(output_image / torch.max(output_image))
-    # plt.show()
+    # Set the networks to training mode and put them on the right device
+    encoder.train()
+    renderer.train()
+    encoder.to(device)
+    renderer.to(device)
+
+    num_samples = 100
+    for i in range(num_samples):
+        print(f"Example: {i} / {num_samples-1}")
+        data_iter = iter(dataset_loader) # Why do we need to do this every time?
+        samples = data_iter.next()
+
+        scene['objects']['triangle']['material_idx'] = tensor_l(
+            np.zeros(samples['mesh']['face'][0].shape[0], dtype=int).tolist())
+        scene['objects']['triangle']['face'] = samples['mesh']['face'][0].to(device)
+        scene['objects']['triangle']['normal'] = samples['mesh']['normal'][0].to(device)
+
+        cam_pos = uniform_sample_sphere(
+            radius=opt.cam_dist, num_samples=1,
+            axis=None, angle=None,
+            theta_range=np.deg2rad(opt.theta),
+            phi_range=np.deg2rad(opt.phi))
+        
+        # TODO randomize light
+
+        scene['camera']['at'] = tensor_f([0.05, 0.0, 0.0])
+        scene['camera']['eye'] = tensor_f(cam_pos[0])
+        cam_dir = scene['camera']['at'] - scene['camera']['eye']
+        cam_dir = cam_dir / torch.norm(cam_dir, p=2, dim=-1).unsqueeze(-1)
+
+        res = render(scene,
+                    norm_depth_image_only=opt.norm_depth_image_only,
+                    double_sided=True, use_quartic=opt.use_quartic)
+
+        # put the channel dimension before the width and height
+        input_image = res['image'].view(1, res['image'].size(-1), *res['image'].size()[:-1])
+
+        mu_z, logvar_z = encoder(input_image)
+        z = gauss_reparametrize(mu_z, logvar_z)
+
+        view = torch.cat((scene['camera']['eye'], cam_dir), -1).unsqueeze(0)
+
+        # Run and train
+        optimizer.zero_grad()
+        output_image, saved_outputs = renderer(z.view(-1, latent_size), view)
+        output_image = output_image.squeeze(0)
+
+        print(f"Min in image: {torch.min(output_image)}, Max: {torch.max(output_image)}, Avg: {torch.mean(output_image)}")
+
+        output_image_normalized = (output_image - torch.min(output_image)) /\
+                (torch.max(output_image) - torch.min(output_image) + 1e-10)
+                
+        loss = criterion(output_image_normalized, res['image'])
+        loss.backward()
+        optimizer.step()
+        # TODO add other losses on the saved_outputs
+
+        print(f"Loss at step {i}: {loss}")
+
+        # Log outputs
+        folder = 'tmp_outputs'
+        imwrite(f'{folder}/input_image_{i}.png', res['image'].cpu().numpy())
+        imwrite(f'{folder}/input_image_normalized_{i}.png', ((res['image'] - torch.min(res['image'])) /
+                (torch.max(res['image']) - torch.min(res['image']) + 1e-10)).cpu().numpy())
+        imwrite(f'{folder}/output_image_{i}.png', output_image.detach().cpu().numpy())
+        imwrite(f'{folder}/output_image_normalized_{i}.png', output_image_normalized.detach().cpu().numpy())
+
+
+    # def render_new_view(view, width, height, projection='perspective'):
+    #     input_views = view.view(-1, view.size(-1))
+    #     depths = []
+    #     images = []
+
+    #     scene['camera']['viewport'] = [0, 0, width, height]
+    #     scene['camera']['proj_type'] = projection
+
+    #     print(f"Rendering with sizes {width}, {height}")
+
+    #     for i, v in enumerate(input_views):
+    #         if i % 100 == 0:
+    #             print(f"Rendering {i} / {input_views.size(0)}")
+
+    #         scene['camera']['eye'] = v[:3]
+    #         scene['camera']['at'] = v[:3] + v[3:]
+    #         # TODO change render so that it also returns albedo and emittance
+
+    #         render_result = render(scene,
+    #                                norm_depth_image_only=opt.norm_depth_image_only,
+    #                                double_sided=True, use_quartic=opt.use_quartic)
+    #         depths.append(render_result['depth'].unsqueeze(-1))
+    #         images.append(render_result['image'])
+
+    #     depths = torch.stack(depths)
+    #     images = torch.stack(images)
+    #     return {
+    #         'depth': depths.view(*view.size()[:-1], *depths.size()[-3:]),
+    #         'image': images.view(*view.size()[:-1], *images.size()[-3:])
+    #     }
 
 
 if __name__ == '__main__':
