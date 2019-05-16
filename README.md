@@ -1,4 +1,4 @@
-# pix2scene
+# pix2shape
 Modelling 3D structure from Images
 
 Setup:
